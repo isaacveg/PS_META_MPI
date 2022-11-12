@@ -88,13 +88,13 @@ def main():
     common_config.lr = client_config.common_config.lr
     common_config.decay_rate = client_config.common_config.decay_rate
     common_config.min_lr=client_config.common_config.min_lr
-    # common_config.epoch = client_config.common_config.epoch
-    common_config.epoch = 1
+    common_config.epoch = client_config.common_config.epoch
     common_config.momentum = client_config.common_config.momentum
     common_config.weight_decay = client_config.common_config.weight_decay
     common_config.data_path = client_config.common_config.data_path
     common_config.para=client_config.para
     
+    common_config.tag = 1
     # init config
     logger.info(str(common_config.__dict__))
 
@@ -115,6 +115,9 @@ def main():
         loop.run_until_complete(asyncio.wait(tasks))
 
         loop.close()
+        if common_config.tag==common_config.epoch+1:
+            break
+
 
 async def local_training(comm, common_config, train_loader, test_loader):
     local_model = models.create_model_instance(common_config.dataset_type, common_config.model_type)
@@ -123,25 +126,25 @@ async def local_training(comm, common_config, train_loader, test_loader):
     epoch_lr = common_config.lr
     
     local_steps = 20
-    if common_config.epoch > 1 and common_config.epoch % 1 == 0:
+    if common_config.tag > 1 and common_config.tag % 1 == 0:
         epoch_lr = max((common_config.decay_rate * epoch_lr, common_config.min_lr))
         common_config.lr = epoch_lr
-    logger.info("epoch-{} lr: {}".format(common_config.epoch, epoch_lr))
+    logger.info("epoch-{} lr: {}".format(common_config.tag, epoch_lr))
     if common_config.momentum<0:
         optimizer = optim.SGD(local_model.parameters(), lr=epoch_lr, weight_decay=common_config.weight_decay)
     else:
         optimizer = optim.SGD(local_model.parameters(),momentum=common_config.momentum, lr=epoch_lr, weight_decay=common_config.weight_decay)
     train_loss = train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=common_config.model_type)
     test_loss, acc = test(local_model, test_loader, device, model_type=common_config.model_type)
-    logger.info("after aggregation, epoch: {}, train loss: {}, test loss: {}, test accuracy: {}".format(common_config.epoch, train_loss, test_loss, acc))
+    logger.info("after aggregation, epoch: {}, train loss: {}, test loss: {}, test accuracy: {}".format(common_config.tag, train_loss, test_loss, acc))
     logger.info("send para")
     local_paras = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
-    # send_data_await(comm, local_paras, MASTER_RANK, common_config.epoch)
-    await send_data(comm, local_paras, MASTER_RANK, common_config.epoch)
+    # send_data_await(comm, local_paras, MASTER_RANK, common_config.tag)
+    await send_data(comm, local_paras, MASTER_RANK, common_config.tag)
     logger.info("after send")
-    local_para = await get_data(comm, MASTER_RANK, common_config.epoch)
+    local_para = await get_data(comm, MASTER_RANK, common_config.tag)
     common_config.para=local_para
-    common_config.epoch = common_config.epoch+1
+    common_config.tag = common_config.tag+1
     logger.info("get end")
 
 
