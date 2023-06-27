@@ -4,6 +4,12 @@ import paramiko
 from scp import SCPClient
 from torch.utils.tensorboard import SummaryWriter
 from comm_utils import *
+import yaml
+
+global cfg
+if 'cfg' not in globals():
+    with open('config.yml', 'r') as f:
+        cfg = yaml.load(f, Loader=yaml.FullLoader)
 
 
 class ClientAction:

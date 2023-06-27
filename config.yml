@@ -1,0 +1,47 @@
+---
+# model
+model_type: 'lr_mnn'                   
+cnn_hidden_size: [64, 128, 128]
+# resnet_hidden_size: [64, 64, 128, 256, 512]
+
+# data
+dataset_type: 'avazu'             # "MNIST", "CIFAR10" or "image100"
+data_shape: [1, 8776]             # MNIST is [1, 28, 28], CIFAR10 is [3, 32, 32] and image100 is [3, 144, 144]
+classes_size: 2                    # MNIST is 10, CIFAR10 is 10, image100 is 100
+data_partition_pattern: 0          # 0, 1, or 2. (0 is iid while 1 and 2 are both non-iid)
+non_iid_ratio: 7                    # make sure: 0 < non_iid_ratio < 10
+min_threshold: 4
+
+# batch size
+local_batch_size: 20               # local training batch size
+test_batch_size: 10000                 # test batch size of the server
+client_test_batch_size: 10000
+
+# training setting
+lr: 0.1
+decay_rate: 0.99
+min_lr: 0.001
+momentum: 0.9                        # momentum < 0 means the momentum is None
+weight_decay: 0.0005
+
+# global control
+client_num: 100                       # total number of clients (not the number of selected clients)
+epoch_num: 100
+local_iters: 30                      # local training step of the client in each epoch
+compress_method: random              # compress method, random/top_k/quant
+compress_ratio: 0.5                # compress ratio, only used when method is random/top_k
+
+# CUDA
+server_use_cuda: True
+server_cuda: '3'                    # which gpu to choose for server
+client_use_cuda: True
+client_cuda: '-1'                   # '-1' means that client chooses the gpu adaptively according to the process id
+
+# path
+dataset_path: '/data/yzhu/datasets'
+# cache_path: '/data/yzhu/datasets'
+
+# seed
+model_init_seed: 2024
+client_selection_seed: 2024
+data_partition_seed: 2024
