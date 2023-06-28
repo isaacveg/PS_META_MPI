@@ -60,9 +60,10 @@ class LabelwisePartitioner(object):
     """
     根据数据类别划分
     """
-    def __init__(self, data, partition_sizes, seed=2020):
+    def __init__(self, data, partition_sizes, seed=2024):
         # sizes is a class_num * vm_num matrix
         self.data = data
+        # 每个列表包含class num个列表
         self.partitions = [list() for _ in range(len(partition_sizes[0]))]
         rng = random.Random()
         rng.seed(seed)
@@ -70,7 +71,6 @@ class LabelwisePartitioner(object):
         label_indexes = list()
         class_len = list()
         # label_indexes includes class_num lists. Each list is the set of indexs of a specific class
-        # for class_idx in range(len(data.classes)):
         for class_idx in range(len(data.classes)):
             label_indexes.append(list(np.where(np.array(data.targets) == class_idx)[0]))
             class_len.append(len(label_indexes[class_idx]))
@@ -87,7 +87,6 @@ class LabelwisePartitioner(object):
 
     def use(self, partition):
         selected_idxs = self.partitions[partition]
-
         return selected_idxs
     
     def __len__(self):

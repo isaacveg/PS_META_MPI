@@ -44,7 +44,7 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
     if samples_num != 0:
         train_loss /= samples_num
     
-    return train_loss
+    return train_loss, time.time()-t_start
 
 def test(model, data_loader, device=torch.device("cpu"), model_type=None):
     model.eval()

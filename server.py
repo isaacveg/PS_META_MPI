@@ -8,7 +8,7 @@ import pickle
 import asyncio
 import concurrent.futures
 import json
-import random
+from random import sample
 import time
 from tkinter.tix import Tree
 import numpy as np
@@ -26,136 +26,169 @@ from mpi4py import MPI
 import logging
 
 
-#init parameters
-parser = argparse.ArgumentParser(description='Distributed Client')
-parser.add_argument('--dataset_type', type=str, default='CIFAR10')
-parser.add_argument('--model_type', type=str, default='AlexNet')
-parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--data_pattern', type=int, default=0)
-parser.add_argument('--lr', type=float, default=0.1)
-parser.add_argument('--decay_rate', type=float, default=0.99)
-parser.add_argument('--min_lr', type=float, default=0.001)
-parser.add_argument('--epoch', type=int, default=500)
-parser.add_argument('--momentum', type=float, default=-1)
-parser.add_argument('--weight_decay', type=float, default=0.0)
-parser.add_argument('--data_path', type=str, default='/data/docker/data')
-parser.add_argument('--use_cuda', action="store_false", default=True)
-
-args = parser.parse_args()
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
-device = torch.device("cuda" if args.use_cuda and torch.cuda.is_available() else "cpu")
-
+os.environ['CUDA_VISIBLE_DEVICES'] = cfg['server_cuda']
+device = torch.device("cuda" if cfg['server_use_cuda'] and torch.cuda.is_available() else "cpu")
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 csize = comm.Get_size()
 
-RESULT_PATH = os.getcwd() + '/server/'
-
+now = time.strftime("%Y-%m-%d-%H_%M_%S",time.localtime(time.time()))
+RESULT_PATH = os.getcwd() + '/server_log/'
+MODEL_PATH = os.getcwd() + '/model_save/' + now + '/'
+GLOBAL_MODEL_PATH = MODEL_PATH + now + "_global.model"
 if not os.path.exists(RESULT_PATH):
     os.makedirs(RESULT_PATH, exist_ok=True)
+if not os.path.exists(MODEL_PATH):
+    os.makedirs(MODEL_PATH, exist_ok=True)
 
-# init logger
+"""init logger"""
 logger = logging.getLogger(os.path.basename(__file__).split('.')[0])
 logger.setLevel(logging.INFO)
 
-now = time.strftime("%Y-%m-%d-%H_%M_%S",time.localtime(time.time()))
 filename = RESULT_PATH + now + "_" +os.path.basename(__file__).split('.')[0] +'.log'
 fileHandler = logging.FileHandler(filename=filename)
 formatter = logging.Formatter("%(message)s")
 fileHandler.setFormatter(formatter)
 logger.addHandler(fileHandler)
 
+comm_tags = np.ones(cfg['client_num'] + 1)
+
+
 def main():
-    logger.info("csize:{}".format(int(csize)))
-    logger.info("server start (rank):{}".format(int(rank)))
-    # init config
-    common_config = CommonConfig()
-    common_config.model_type = args.model_type
-    common_config.dataset_type = args.dataset_type
-    common_config.batch_size = args.batch_size
-    common_config.data_pattern=args.data_pattern
-    common_config.lr = args.lr
-    common_config.decay_rate = args.decay_rate
-    common_config.min_lr=args.min_lr
-    common_config.epoch = args.epoch
-    common_config.momentum = args.momentum
-    common_config.data_path = args.data_path
-    common_config.weight_decay = args.weight_decay
+    client_num = cfg['client_num']
+    logger.info("Total number of clients: {}".format(client_num))
+    logger.info("\nModel type: {}".format(cfg["model_type"]))
+    logger.info("Dataset: {}".format(cfg["dataset_type"]))
 
-    worker_num = int(csize)-1
-
-    global_model = models.create_model_instance(common_config.dataset_type, common_config.model_type)
+    global_model = models.create_model_instance(cfg["dataset_type"], cfg["model_type"])
     init_para = torch.nn.utils.parameters_to_vector(global_model.parameters())
-    common_config.para_nums=init_para.nelement()
+    para_nums = init_para.nelement()
     model_size = init_para.nelement() * 4 / 1024 / 1024
-    logger.info("para num: {}".format(common_config.para_nums))
+    logger.info("para num: {}".format(para_nums))
     logger.info("Model Size: {} MB".format(model_size))
 
-    # create workers
-    worker_list: List[Worker] = list()
-    for worker_idx in range(worker_num):
-        worker_list.append(
-            Worker(config=ClientConfig(common_config=common_config),rank=worker_idx+1)
-        )
-    #到了这里，worker已经启动了
-
     # Create model instance
-    train_data_partition = partition_data(common_config.dataset_type, common_config.data_pattern)
+    train_data_partition, partition_sizes = partition_data(
+        dataset_type=cfg['dataset_type'],
+        partition_pattern=cfg['data_partition_pattern'],
+        non_iid_ratio=cfg['non_iid_ratio'],
+        client_num=client_num
+    )
+    logger.info('\nData partition: ')
+    for i in range(len(partition_sizes)):
+        s = ""
+        for j in range(len(partition_sizes[i])):
+            s += "{:.2f}".format(partition_sizes[i][j]) + " "
+        logger.info(s)
 
-    for worker_idx, worker in enumerate(worker_list):
-        worker.config.para = init_para
-        worker.config.train_data_idxes = train_data_partition.use(worker_idx)
+    # create workers
+    all_clients: List[ClientConfig] = list()
+    for client_idx in range(client_num):
+        client = ClientConfig(client_idx)
+        client.lr = cfg['lr']
+        client.params = init_para
+        client.train_data_idxes = train_data_partition.use(client_idx)
+        client.local_model_path = MODEL_PATH + now + "_local_" + str(client_idx) + ".model"
+        client.global_model_path = GLOBAL_MODEL_PATH
+        all_clients.append(client)
 
-    # connect socket and send init config
-    communication_parallel(worker_list, 1, comm, action="init")
+    # connect and send init config
+    # communication_parallel(all_clients, 1, comm, action="init")
 
     # recoder: SummaryWriter = SummaryWriter()
     global_model.to(device)
-    _, test_dataset = datasets.load_datasets(common_config.dataset_type,common_config.data_path)
-    test_loader = datasets.create_dataloaders(test_dataset, batch_size=128, shuffle=False)
+    _, test_dataset = datasets.load_datasets(cfg['dataset_type'], cfg['dataset_path'])
+    test_loader = datasets.create_dataloaders(test_dataset, batch_size=cfg['test_batch_size'], shuffle=False)
+
+    best_epoch = 1
+    best_acc = 0.0
+    best_loss = 0.0
+
+    for epoch_idx in range(1, 1 + cfg['epoch_num']):
+        logger.info("_____****_____\nEpoch: {:04d}".format(epoch_idx))
+        print("_____****_____\nEpoch: {:04d}".format(epoch_idx))
+
+        # The client selection algorithm can be implemented
+        selected_num = cfg['selected_num']
+        selected_client_idxes = sample(range(client_num), selected_num)
+        logger.info("Selected client idxes: {}".format(selected_client_idxes))
+        print("Selected client idxes: {}".format(selected_client_idxes))
+        selected_clients = []
+        for client_idx in selected_client_idxes:
+            all_clients[client_idx].epoch_idx = epoch_idx
+            selected_clients.append(all_clients[client_idx])
+
+        # send the configurations to the selected clients
+        communication_parallel(selected_clients, action="send_config")
+
+        # when all selected clients have completed local training, receive their configurations
+        communication_parallel(selected_clients, action="get_config")
+
+        # aggregate the clients' local model parameters
+        aggregate_model_para(global_model, selected_clients)   
+
+        # test and save the best global model
+        test_loss, test_acc = test(global_model, test_loader, None)
+
+        if test_acc > best_acc:
+            best_acc = test_acc
+            best_epoch = epoch_idx
+            model_save_path = MODEL_PATH + now + "_" + "best_global.model"
+            torch.save(global_model.state_dict(), model_save_path)
+
+        logger.info(
+            "Test_Loss: {:.4f}\n".format(test_loss) +
+            "Test_Acc: {:.4f}\n".format(test_acc) +
+            "Best_Acc: {:.4f}\n".format(best_acc) +
+            "Best_Epoch: {:04d}\n".format(best_epoch)
+        )
+
+        for m in range(len(selected_clients)):
+            comm_tags[m + 1] += 1
 
 
-    for epoch_idx in range(1, 1+common_config.epoch):
-        logger.info("get begin")
-        communication_parallel(worker_list, epoch_idx, comm, action="get_para")
-        logger.info("get end")
-        global_para = aggregate_model_para(global_model,worker_list)
-        logger.info("send begin")
-        communication_parallel(worker_list, epoch_idx, comm, action="send_model",data=global_para)
-        logger.info("send end")
-        test_loss, acc = test(global_model, test_loader, device, model_type=args.model_type)
-        logger.info("Epoch: {}, accuracy: {}, test_loss: {}\n".format(epoch_idx, acc, test_loss))
-     
-    # close socket
+
 def aggregate_model_para(global_model, worker_list):
     global_para = torch.nn.utils.parameters_to_vector(global_model.parameters()).detach()
     with torch.no_grad():
         para_delta = torch.zeros_like(global_para)
         for worker in worker_list:
-            model_delta = (worker.config.neighbor_paras - global_para)
+            model_delta = (worker.params - global_para)
             #gradient
             # model_delta = worker.config.neighbor_paras
-            para_delta += worker.config.average_weight * model_delta
+            para_delta += worker.average_weight * model_delta
         global_para += para_delta
     torch.nn.utils.vector_to_parameters(global_para, global_model.parameters())
     return global_para
 
-def communication_parallel(worker_list, epoch_idx, comm, action, data=None):
+
+async def send_config(client, client_rank, comm_tag):
+    await send_data(comm, client, client_rank, comm_tag)
+
+
+async def get_config(client, client_rank, comm_tag):
+    config_received = await get_data(comm, client_rank, comm_tag)
+    for k, v in config_received.__dict__.items():
+        setattr(client, k, v)
+
+
+def communication_parallel(client_list, action):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     tasks = []
-    for worker in worker_list:
-        if action == "init":
-            task = asyncio.ensure_future(worker.send_init_config(comm, epoch_idx))
-        elif action == "get_para":
-            task = asyncio.ensure_future(worker.get_model(comm, epoch_idx))
-        elif action == "send_model":
-            task = asyncio.ensure_future(worker.send_data(data, comm, epoch_idx))
+    for m, client in enumerate(client_list): 
+        if action == "send_config":
+            task = asyncio.ensure_future(send_config(client, m + 1, comm_tags[m + 1]))
+        elif action == "get_config":
+            task = asyncio.ensure_future(get_config(client, m + 1, comm_tags[m + 1]))
+        else:
+            raise ValueError('Not valid action')
         tasks.append(task)
     loop.run_until_complete(asyncio.wait(tasks))
     loop.close()
+
 
 def non_iid_partition(ratio, train_class_num, worker_num):
     partition_sizes = np.ones((train_class_num, worker_num)) * ((1 - ratio) / (worker_num-1))
@@ -165,59 +198,67 @@ def non_iid_partition(ratio, train_class_num, worker_num):
 
     return partition_sizes
 
-def partition_data(dataset_type, data_pattern, worker_num=10):
-    train_dataset, _ = datasets.load_datasets(dataset_type=dataset_type,data_path=args.data_path)
 
-    if dataset_type == "CIFAR10" or dataset_type == "FashionMNIST":
-        train_class_num=10
-        if data_pattern == 0:
-            partition_sizes = np.ones((train_class_num, worker_num)) * (1.0 / worker_num)
-        elif data_pattern == 1:
-            non_iid_ratio = 0.2
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 2:
-            non_iid_ratio = 0.4
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 3:
-            non_iid_ratio = 0.6
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 4:
-            non_iid_ratio = 0.8
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-    elif dataset_type == "EMNIST":
-        train_class_num=62
-        if data_pattern == 0:
-            partition_sizes = np.ones((train_class_num, worker_num)) * (1.0 / worker_num)
-        elif data_pattern == 1:
-            non_iid_ratio = 0.2
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 2:
-            non_iid_ratio = 0.4
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 3:
-            non_iid_ratio = 0.6
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 4:
-            non_iid_ratio = 0.8
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-    if dataset_type == "CIFAR100" or dataset_type == "image100":
-        train_class_num=100
-        if data_pattern == 0:
-            partition_sizes = np.ones((train_class_num, worker_num)) * (1.0 / worker_num)
-        elif data_pattern == 1:
-            non_iid_ratio = 0.2
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 2:
-            non_iid_ratio = 0.4
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 3:
-            non_iid_ratio = 0.6
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-        elif data_pattern == 4:
-            non_iid_ratio = 0.8
-            partition_sizes = non_iid_partition(non_iid_ratio,train_class_num,worker_num)
-    train_data_partition = datasets.LabelwisePartitioner(train_dataset, partition_sizes=partition_sizes)
-    return train_data_partition
+def partition_data(dataset_type, partition_pattern, non_iid_ratio, client_num=10):
+    """
+    partition_size should be in shape:
+    classes_size * client_num, each number is ratio for each class on one client.
+    """
+    train_dataset, _ = datasets.load_datasets(dataset_type=dataset_type, data_path=cfg['dataset_path'])
+    partition_sizes = np.ones((cfg['classes_size'], client_num))
+    # iid
+    # every client has same number of samples and corresponding classes
+    if partition_pattern == 0:
+        partition_sizes *= (1.0 / client_num)
+    # non-iid
+    # each client contains all classes of data, but the proportion of certain classes of data is very large
+    elif partition_pattern == 1:
+        if 0 < non_iid_ratio < 10:
+            partition_sizes *= ((1 - non_iid_ratio * 0.1) / (client_num - 1))
+            for i in range(cfg['classes_size']):
+                partition_sizes[i][i % client_num] = non_iid_ratio * 0.1
+        else:
+            raise ValueError('Non-IID ratio is out of range')
+    # non-iid
+    # each client misses some classes of data, while the other classes of data are distributed uniformly
+    elif partition_pattern == 2:
+        if 0 < non_iid_ratio < 10:
+            # calculate how many classes of data each worker is missing
+            missing_class_num = int(round(cfg['classes_size'] * (non_iid_ratio * 0.1)))
+
+            begin_idx = 0
+            for worker_idx in range(client_num):
+                for i in range(missing_class_num):
+                    partition_sizes[(begin_idx + i) % cfg['classes_size']][worker_idx] = 0.
+                begin_idx = (begin_idx + missing_class_num) % cfg['classes_size']
+
+            for i in range(cfg['classes_size']):
+                count = np.count_nonzero(partition_sizes[i])
+                for j in range(client_num):
+                    if partition_sizes[i][j] == 1.:
+                        partition_sizes[i][j] = 1. / count
+        else:
+            raise ValueError('Non-IID ratio is too large')
+    # non-iid
+    # same as pattern 1 but every client has more than one major class
+    elif partition_pattern == 3:
+        if 0 < non_iid_ratio < 10:
+            most_data_proportion = cfg['classes_size'] / client_num * non_iid_ratio * 0.1
+            minor_data_proportion = cfg['classes_size'] / client_num * (1 - non_iid_ratio * 0.1) / (
+                        cfg['classes_size'] - 1)
+            partition_sizes *= minor_data_proportion
+            for i in range(client_num):
+                partition_sizes[i % cfg['classes_size']][i] = most_data_proportion
+        else:
+            raise ValueError('Non-IID ratio is out of range')
+    else:
+        raise ValueError('Not valid partition pattern')
+
+    train_data_partition = datasets.LabelwisePartitioner(
+        train_dataset, partition_sizes=partition_sizes, seed=cfg['data_partition_seed']
+    )
+
+    return train_data_partition, partition_sizes
 
 if __name__ == "__main__":
     main()

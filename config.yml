@@ -1,11 +1,11 @@
 ---
 # model
-model_type: 'lr_mnn'                   
-cnn_hidden_size: [64, 128, 128]
+model_type: 'AlexNet'                   
+# cnn_hidden_size: [64, 128, 128]
 # resnet_hidden_size: [64, 64, 128, 256, 512]
 
 # data
-dataset_type: 'avazu'             # "MNIST", "CIFAR10" or "image100"
+dataset_type: 'CIFAR10'             # "MNIST", "CIFAR10","CIFAR100", "EMNIST", "FashionMNIST", "image100"
 data_shape: [1, 8776]             # MNIST is [1, 28, 28], CIFAR10 is [3, 32, 32] and image100 is [3, 144, 144]
 classes_size: 2                    # MNIST is 10, CIFAR10 is 10, image100 is 100
 data_partition_pattern: 0          # 0, 1, or 2. (0 is iid while 1 and 2 are both non-iid)
@@ -26,6 +26,7 @@ weight_decay: 0.0005
 
 # global control
 client_num: 100                       # total number of clients (not the number of selected clients)
+selected_num: 10                      # the number of selected clients
 epoch_num: 100
 local_iters: 30                      # local training step of the client in each epoch
 compress_method: random              # compress method, random/top_k/quant
