@@ -3,6 +3,8 @@ import numpy as np
 from torch.utils.data import DataLoader
 # from torchvision import datasets as ds
 
+# import datasets
+# from datasets import *
 import datasets.CIFAR10
 import datasets.CIFAR100
 import datasets.FashionMNIST
@@ -11,6 +13,10 @@ import datasets.SVHN
 import datasets.EMNIST
 import datasets.tinyImageNet
 import datasets.image100
+# add your own datasets 
+
+
+from config import cfg
 
 class Partition(object):
     """
@@ -63,7 +69,6 @@ class LabelwisePartitioner(object):
     def __init__(self, data, partition_sizes, seed=2024):
         # sizes is a class_num * vm_num matrix
         self.data = data
-        # 每个列表包含class num个列表
         self.partitions = [list() for _ in range(len(partition_sizes[0]))]
         rng = random.Random()
         rng.seed(seed)
@@ -71,13 +76,14 @@ class LabelwisePartitioner(object):
         label_indexes = list()
         class_len = list()
         # label_indexes includes class_num lists. Each list is the set of indexs of a specific class
-        for class_idx in range(len(data.classes)):
+        # for class_idx in range(len(data.classes)):
+        for class_idx in range(cfg['classes_size']):
             label_indexes.append(list(np.where(np.array(data.targets) == class_idx)[0]))
             class_len.append(len(label_indexes[class_idx]))
             rng.shuffle(label_indexes[class_idx])
-        
+
         # distribute class indexes to each vm according to sizes matrix
-        for class_idx in range(len(data.classes)):
+        for class_idx in range(cfg['classes_size']):
             begin_idx = 0
             for vm_idx, frac in enumerate(partition_sizes[class_idx]):
                 end_idx = begin_idx + round(frac * class_len[class_idx])
@@ -93,7 +99,7 @@ class LabelwisePartitioner(object):
         return len(self.data)
 
 
-def create_dataloaders(dataset, batch_size, selected_idxs=None, shuffle=True, pin_memory=True, num_workers=4):
+def create_dataloaders(dataset, batch_size, selected_idxs=None, shuffle=True, pin_memory=True, num_workers=0):
     if selected_idxs == None:
         dataloader = DataLoader(dataset, batch_size=batch_size,
                                     shuffle=shuffle, pin_memory=pin_memory, num_workers=num_workers)

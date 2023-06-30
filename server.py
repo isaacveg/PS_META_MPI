@@ -1,5 +1,4 @@
 from fileinput import filename
-import imp
 import os
 import sys
 import argparse
@@ -53,10 +52,11 @@ formatter = logging.Formatter("%(message)s")
 fileHandler.setFormatter(formatter)
 logger.addHandler(fileHandler)
 
-comm_tags = np.ones(cfg['client_num'] + 1)
-
+# comm_tags = np.ones(cfg['selected_num'] + 1)
+comm_tag = 1
 
 def main():
+    global comm_tag
     client_num = cfg['client_num']
     logger.info("Total number of clients: {}".format(client_num))
     logger.info("\nModel type: {}".format(cfg["model_type"]))
@@ -83,12 +83,16 @@ def main():
             s += "{:.2f}".format(partition_sizes[i][j]) + " "
         logger.info(s)
 
+    # print(init_para.device)
+    init_para = init_para.to(device)
+    # print(init_para.device)
     # create workers
     all_clients: List[ClientConfig] = list()
     for client_idx in range(client_num):
         client = ClientConfig(client_idx)
         client.lr = cfg['lr']
         client.params = init_para
+        # print(client_idx, client.params.device)
         client.train_data_idxes = train_data_partition.use(client_idx)
         client.local_model_path = MODEL_PATH + now + "_local_" + str(client_idx) + ".model"
         client.global_model_path = GLOBAL_MODEL_PATH
@@ -99,6 +103,7 @@ def main():
 
     # recoder: SummaryWriter = SummaryWriter()
     global_model.to(device)
+    # print(global_model.device, "global_model_device")
     _, test_dataset = datasets.load_datasets(cfg['dataset_type'], cfg['dataset_path'])
     test_loader = datasets.create_dataloaders(test_dataset, batch_size=cfg['test_batch_size'], shuffle=False)
 
@@ -118,19 +123,19 @@ def main():
         selected_clients = []
         for client_idx in selected_client_idxes:
             all_clients[client_idx].epoch_idx = epoch_idx
+            all_clients[client_idx].params = torch.nn.utils.parameters_to_vector(global_model.parameters()).detach()
             selected_clients.append(all_clients[client_idx])
 
         # send the configurations to the selected clients
         communication_parallel(selected_clients, action="send_config")
-
+        print("send success")
         # when all selected clients have completed local training, receive their configurations
         communication_parallel(selected_clients, action="get_config")
-
+        print("get success")
         # aggregate the clients' local model parameters
         aggregate_model_para(global_model, selected_clients)   
-
         # test and save the best global model
-        test_loss, test_acc = test(global_model, test_loader, None)
+        test_loss, test_acc = test(global_model, test_loader, device, cfg['model_type'])
 
         if test_acc > best_acc:
             best_acc = test_acc
@@ -145,8 +150,9 @@ def main():
             "Best_Epoch: {:04d}\n".format(best_epoch)
         )
 
-        for m in range(len(selected_clients)):
-            comm_tags[m + 1] += 1
+        # for m in range(len(selected_clients)):
+        #     comm_tags[m + 1] += 1
+        comm_tag += 1
 
 
 
@@ -155,10 +161,11 @@ def aggregate_model_para(global_model, worker_list):
     with torch.no_grad():
         para_delta = torch.zeros_like(global_para)
         for worker in worker_list:
+            # print(global_para.device, worker.params.device)
             model_delta = (worker.params - global_para)
             #gradient
             # model_delta = worker.config.neighbor_paras
-            para_delta += worker.average_weight * model_delta
+            para_delta += worker.aggregate_weight * model_delta
         global_para += para_delta
     torch.nn.utils.vector_to_parameters(global_para, global_model.parameters())
     return global_para
@@ -170,7 +177,8 @@ async def send_config(client, client_rank, comm_tag):
 
 async def get_config(client, client_rank, comm_tag):
     config_received = await get_data(comm, client_rank, comm_tag)
-    for k, v in config_received.__dict__.items():
+    # for k, v in config_received.__dict__.items():
+    for k, v in config_received.items():
         setattr(client, k, v)
 
 
@@ -180,9 +188,13 @@ def communication_parallel(client_list, action):
     tasks = []
     for m, client in enumerate(client_list): 
         if action == "send_config":
-            task = asyncio.ensure_future(send_config(client, m + 1, comm_tags[m + 1]))
+            # print("sending to worker {}, tags {}".format(m+1, comm_tags[m+1]))
+            print("sending to worker {}, tags {}".format(m+1, comm_tag))
+            task = asyncio.ensure_future(send_config(client, m + 1, comm_tag))
         elif action == "get_config":
-            task = asyncio.ensure_future(get_config(client, m + 1, comm_tags[m + 1]))
+            # print("get worker {}, tags {}".format(m+1, comm_tags[m+1]))
+            print("get worker {}, tags {}".format(m+1, comm_tag))
+            task = asyncio.ensure_future(get_config(client, m + 1, comm_tag))
         else:
             raise ValueError('Not valid action')
         tasks.append(task)

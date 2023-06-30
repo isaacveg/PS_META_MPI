@@ -15,26 +15,27 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
     t_start = time.time()
     model.train()
     if local_iters is None:
-        local_iters = math.ceil(len(data_loader.loader.dataset) / data_loader.loader.batch_size)
-    #print("local_iters: ", local_iters)
+        local_iters = math.ceil(len(data_loader.dataset) / data_loader.batch_size)
+    # print("local_iters: ", local_iters)
 
     train_loss = 0.0
     samples_num = 0
+    # data_loader_iter = iter(data_loader)
     for iter_idx in range(local_iters):
-        data, target = next(data_loader)
-
+        data, target = next(iter(data_loader))
+    # for data, target in data_loader:
         if model_type == 'LR':
             data = data.squeeze(1).view(-1, 28 * 28)
             
         data, target = data.to(device), target.to(device)
         
         output = model(data)
-
+ 
         optimizer.zero_grad()
         
         loss_func = nn.CrossEntropyLoss() 
         loss =loss_func(output, target)
-        #loss = F.nll_loss(output, target)
+        # print("here")
         loss.backward()
         optimizer.step()
 
@@ -46,9 +47,10 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
     
     return train_loss, time.time()-t_start
 
+
 def test(model, data_loader, device=torch.device("cpu"), model_type=None):
     model.eval()
-    data_loader = data_loader.loader
+    # data_loader = data_loader.loader
     test_loss = 0.0
     test_accuracy = 0.0
 

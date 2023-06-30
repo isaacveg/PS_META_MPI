@@ -38,6 +38,8 @@ else:
 
 device = torch.device("cuda" if cfg['client_use_cuda'] and torch.cuda.is_available() else "cpu")
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
 # init logger
 now = time.strftime("%Y-%m-%d-%H_%M_%S",time.localtime(time.time()))
 RESULT_PATH = os.getcwd() + '/clients_log/' + now + '/'
@@ -63,6 +65,7 @@ def main():
     while True:
         # receive the configuration from the server
         communicate_with_server(client_config, comm_tag, action='get_config')
+        print("client {}, get params, epoch {}, comm_tag {}".format(client_config.idx, client_config.epoch_idx, comm_tag))
 
         logger = init_logger(comm_tag, client_config)
         logger.info("_____****_____\nEpoch: {:04d}".format(client_config.epoch_idx))
@@ -84,29 +87,25 @@ def main():
         loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
 
+        keys_to_send = ["params", "train_time", "send_time"]
+
+        # 构造需要发送的字典
+        config_to_send = {key: getattr(client_config, key) for key in keys_to_send}
+        print("client {} with rank {}, send params, epoch {}, comm_tag {}".format(client_config.idx, rank, client_config.epoch_idx, comm_tag))
+        communicate_with_server(config_to_send, comm_tag, 'send_config')
+
         # send the configuration to the server
         # if cfg['compress_method'] is not None:
         #     client_config.seed = compress.param_compress(model=None, action=cfg['compress_method'], extra_info=cfg['compress_ratio'])
         # communicate_with_server(client_config, comm_tag, action='send_config')
         comm_tag += 1
 
-        if client_config.epoch_idx >= cfg['epoch_num']:
+        if client_config.epoch_idx > cfg['epoch_num']:
             break
 
 
-def init_logger(comm_tag, client_config):
-    logger = logging.getLogger(os.path.basename(__file__).split('.')[0] + str(comm_tag))
-    logger.setLevel(logging.INFO)
-    filename = RESULT_PATH + now + "_" + os.path.basename(__file__).split('.')[0] + '_' + str(
-        client_config.idx) + '.log'
-    file_handler = logging.FileHandler(filename=filename)
-    formatter = logging.Formatter("%(message)s")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    return logger
 
-
-async def local_training(comm, config, train_loader, test_loader, logger):
+async def local_training(config, train_loader, test_loader, logger):
     local_model = models.create_model_instance(cfg['dataset_type'], cfg['model_type'], cfg['classes_size'])
     torch.nn.utils.vector_to_parameters(config.params, local_model.parameters())
     local_model.to(device)
@@ -135,13 +134,24 @@ async def local_training(comm, config, train_loader, test_loader, logger):
     )
 
     logger.info("send and save para")
-    local_paras = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
-    await send_data(comm, local_paras, MASTER_RANK, config.epoch_idx)
-    logger.info("after send")
-    local_para = await get_data(comm, MASTER_RANK, config.epoch_idx)
-    config.params = local_para
+    config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
+
+    # logger.info("after send")
     config.epoch_idx += 1
-    logger.info("get end")
+
+
+
+
+def init_logger(comm_tag, client_config):
+    logger = logging.getLogger(os.path.basename(__file__).split('.')[0] + str(comm_tag))
+    logger.setLevel(logging.INFO)
+    filename = RESULT_PATH + now + "_" + os.path.basename(__file__).split('.')[0] + '_' + str(
+        client_config.idx) + '.log'
+    file_handler = logging.FileHandler(filename=filename)
+    formatter = logging.Formatter("%(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    return logger
 
 
 async def get_config(config, comm_tag):
