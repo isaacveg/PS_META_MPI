@@ -2,7 +2,7 @@
 
 ## Changes  
 Refined version of ymliao98/PS_MPI   
-1. Use config.yaml to simplify settings  
+1. Use config.yml to simplify settings  
 2. Simplified process to make it general  
 3. Cut out useless code to make it elegant  
 4. add your own datasets and models  
@@ -20,7 +20,7 @@ Refined version of ymliao98/PS_MPI
 
 
 ## Run
-The number after should be larger than config.yaml:num_workers  
+The number after should be larger than config.yml:num_workers  
 mpiexec --oversubscribe -n 1 python server.py : -n 10 python client.py  
 
 

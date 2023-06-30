@@ -52,11 +52,9 @@ formatter = logging.Formatter("%(message)s")
 fileHandler.setFormatter(formatter)
 logger.addHandler(fileHandler)
 
-# comm_tags = np.ones(cfg['selected_num'] + 1)
-comm_tag = 1
+comm_tags = np.ones(cfg['selected_num'] + 1)
 
 def main():
-    global comm_tag
     client_num = cfg['client_num']
     logger.info("Total number of clients: {}".format(client_num))
     logger.info("\nModel type: {}".format(cfg["model_type"]))
@@ -150,9 +148,8 @@ def main():
             "Best_Epoch: {:04d}\n".format(best_epoch)
         )
 
-        # for m in range(len(selected_clients)):
-        #     comm_tags[m + 1] += 1
-        comm_tag += 1
+        for m in range(len(selected_clients)):
+            comm_tags[m + 1] += 1
 
 
 
@@ -188,13 +185,11 @@ def communication_parallel(client_list, action):
     tasks = []
     for m, client in enumerate(client_list): 
         if action == "send_config":
-            # print("sending to worker {}, tags {}".format(m+1, comm_tags[m+1]))
-            print("sending to worker {}, tags {}".format(m+1, comm_tag))
-            task = asyncio.ensure_future(send_config(client, m + 1, comm_tag))
+            print("sending to worker {}, tags {}".format(m+1, comm_tags[m+1]))
+            task = asyncio.ensure_future(send_config(client, m + 1, comm_tags[m+1]))
         elif action == "get_config":
-            # print("get worker {}, tags {}".format(m+1, comm_tags[m+1]))
-            print("get worker {}, tags {}".format(m+1, comm_tag))
-            task = asyncio.ensure_future(get_config(client, m + 1, comm_tag))
+            print("get worker {}, tags {}".format(m+1, comm_tags[m+1]))
+            task = asyncio.ensure_future(get_config(client, m + 1, comm_tags[m+1]))
         else:
             raise ValueError('Not valid action')
         tasks.append(task)
