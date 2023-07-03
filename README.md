@@ -24,8 +24,9 @@ The number after should be larger than config.yml:num_workers
 mpiexec --oversubscribe -n 1 python server.py : -n 10 python client.py  
 
 
-## Save last training record to anther direction  
-TODO  
+## Save last training record to anther directory 
+This will move all results and config to /results  
+python ./analysis_tools/generate_results.py
 
 
 ## Generate pictures  
