@@ -29,16 +29,3 @@ class ClientConfig:
         self.train_time = 0
         self.send_time = 0
         self.seed = None
-
-        # self.model_type = None
-        # self.dataset_type = None
-        # self.batch_size = None
-        # self.train_loader = None
-        # self.decay_rate = None
-        # self.min_lr = None
-        # self.epoch = None
-        # self.momentum = None
-        # self.weight_decay = None
-        # self.local_steps = 20
-        # self.params = None
-        # self.params_dict = None

@@ -79,11 +79,7 @@ def main():
         # start local training
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        tasks = [
-            asyncio.ensure_future(
-                local_training(client_config, train_loader, test_loader, logger)
-            )
-        ]
+        tasks = [asyncio.ensure_future(local_training(client_config, train_loader, test_loader, logger))]
         loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
 
@@ -94,10 +90,6 @@ def main():
         print("client {} with rank {}, send params, epoch {}, comm_tag {}".format(client_config.idx, rank, client_config.epoch_idx, comm_tag))
         communicate_with_server(config_to_send, comm_tag, 'send_config')
 
-        # send the configuration to the server
-        # if cfg['compress_method'] is not None:
-        #     client_config.seed = compress.param_compress(model=None, action=cfg['compress_method'], extra_info=cfg['compress_ratio'])
-        # communicate_with_server(client_config, comm_tag, action='send_config')
         comm_tag += 1
 
         if client_config.epoch_idx > cfg['epoch_num']:
@@ -109,6 +101,11 @@ async def local_training(config, train_loader, test_loader, logger):
     local_model = models.create_model_instance(cfg['dataset_type'], cfg['model_type'], cfg['classes_size'])
     torch.nn.utils.vector_to_parameters(config.params, local_model.parameters())
     local_model.to(device)
+
+    if cfg['meta_method'] is not None:
+        # set up inner lr
+        config.lr = cfg['meta_inner_lr']
+
     epoch_lr = config.lr
     local_steps = cfg['local_iters']
 
@@ -120,7 +117,12 @@ async def local_training(config, train_loader, test_loader, logger):
         optimizer = optim.SGD(local_model.parameters(), lr=epoch_lr, weight_decay=cfg['weight_decay'])
     else:
         optimizer = optim.SGD(local_model.parameters(), momentum=cfg['momentum'], lr=epoch_lr, weight_decay=cfg['weight_decay'])
-    train_loss, train_time = train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
+
+    if cfg['meta_method'] is None:
+        train_loss, train_time = train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
+    elif cfg['meta_method'] == 'fomaml':
+        train_loss, train_time = train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
+    
     logger.info(
         "Train_loss: {}\n".format(train_loss)+
         "Train_time: {}\n".format(train_time)
@@ -133,10 +135,20 @@ async def local_training(config, train_loader, test_loader, logger):
         "Test_ACC: {}\n".format(test_acc)
     )
 
-    logger.info("send and save para")
-    config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
+    logger.info("Save para")
+    if cfg['meta_method'] is None:
+        config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
+    elif cfg['meta_method'] == 'fomaml':
+        # get grad for the last update and send it back
+        grads = []
+        for group in optimizer.param_groups:
+            for param in group['params']:
+                grad = param.grad
+                if grad is not None:
+                    grads.append(grad.view(-1))
+        grads = torch.cat(grads)
+        config.params = config.params = grads.detach()
 
-    # logger.info("after send")
     config.epoch_idx += 1
 
 

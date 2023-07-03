@@ -156,15 +156,26 @@ def main():
 def aggregate_model_para(global_model, worker_list):
     global_para = torch.nn.utils.parameters_to_vector(global_model.parameters()).detach()
     with torch.no_grad():
-        para_delta = torch.zeros_like(global_para)
-        for worker in worker_list:
-            # print(global_para.device, worker.params.device)
-            model_delta = (worker.params - global_para)
-            #gradient
-            # model_delta = worker.config.neighbor_paras
-            para_delta += worker.aggregate_weight * model_delta
-        global_para += para_delta
-    torch.nn.utils.vector_to_parameters(global_para, global_model.parameters())
+        # normal (or so called Reptile)
+        if cfg['meta_method'] is None: 
+            para_delta = torch.zeros_like(global_para)
+            for worker in worker_list:
+                # print(global_para.device, worker.params.device)
+                model_delta = (worker.params - global_para)
+                #gradient
+                # model_delta = worker.config.neighbor_paras
+                para_delta += worker.aggregate_weight * model_delta
+            global_para += para_delta
+        
+        # First order MAML, use the last update gradients to update
+        elif cfg['meta_method'] == 'fomaml':
+            para_grads = torch.zeros_like(global_para)
+            for worker in worker_list:
+                # add up all grads
+                para_grads += worker.params * worker.aggregate_weight
+            global_para -= para_grads * cfg['meta_outer_lr']
+
+        torch.nn.utils.vector_to_parameters(global_para, global_model.parameters())
     return global_para
 
 

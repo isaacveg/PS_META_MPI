@@ -20,27 +20,11 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
 
     train_loss = 0.0
     samples_num = 0
-    # data_loader_iter = iter(data_loader)
-    for iter_idx in range(local_iters):
-        data, target = next(iter(data_loader))
-    # for data, target in data_loader:
-        if model_type == 'LR':
-            data = data.squeeze(1).view(-1, 28 * 28)
-            
-        data, target = data.to(device), target.to(device)
-        
-        output = model(data)
- 
-        optimizer.zero_grad()
-        
-        loss_func = nn.CrossEntropyLoss() 
-        loss =loss_func(output, target)
-        # print("here")
-        loss.backward()
-        optimizer.step()
 
-        train_loss += (loss.item() * data.size(0))
-        samples_num += data.size(0)
+    for iter_idx in range(local_iters):
+        loss, sample_num = atomic_train(model_type, model, data_loader, device, optimizer)
+        train_loss += (loss.item() * sample_num)
+        samples_num += sample_num
 
     if samples_num != 0:
         train_loss /= samples_num
@@ -82,3 +66,30 @@ def test(model, data_loader, device=torch.device("cpu"), model_type=None):
     # TODO: Record
 
     return test_loss, test_accuracy
+
+
+
+def atomic_train(model_type, model, data_loader, device, optimizer):
+    """
+    Atomic train function
+    """
+    data, target = next(iter(data_loader))
+
+    if model_type == 'LR':
+        data = data.squeeze(1).view(-1, 28 * 28)
+        
+    data, target = data.to(device), target.to(device)
+    
+    output = model(data)
+
+    optimizer.zero_grad()
+    
+    loss_func = nn.CrossEntropyLoss() 
+    loss =loss_func(output, target)
+    # print("here")
+    loss.backward()
+    optimizer.step()
+
+    # train_loss += (loss.item() * data.size(0))
+    # samples_num += data.size(0)
+    return loss, data.size(0)

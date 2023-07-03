@@ -1,7 +1,7 @@
-# PS_MPI
+# PS_META_MPI
 
 ## Changes  
-Refined version of ymliao98/PS_MPI   
+Federated Meta-learning version of isaacveg/PS_MPI   
 1. Use config.yml to simplify settings  
 2. Simplified process to make it general  
 3. Cut out useless code to make it elegant  
