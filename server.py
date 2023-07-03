@@ -19,6 +19,7 @@ from config import *
 import torch.nn.functional as F
 import datasets, models
 from training_utils import test
+import shutil
 
 from mpi4py import MPI
 
@@ -36,11 +37,17 @@ csize = comm.Get_size()
 now = time.strftime("%Y-%m-%d-%H_%M_%S",time.localtime(time.time()))
 RESULT_PATH = os.getcwd() + '/server_log/'
 MODEL_PATH = os.getcwd() + '/model_save/' + now + '/'
+CFG_PATH = os.getcwd() + '/config_save/'
 GLOBAL_MODEL_PATH = MODEL_PATH + now + "_global.model"
 if not os.path.exists(RESULT_PATH):
     os.makedirs(RESULT_PATH, exist_ok=True)
 if not os.path.exists(MODEL_PATH):
     os.makedirs(MODEL_PATH, exist_ok=True)
+if not os.path.exists(CFG_PATH):
+    os.makedirs(CFG_PATH, exist_ok=True)
+
+# Copy config and save
+shutil.copy('./config.yml', CFG_PATH)
 
 """init logger"""
 logger = logging.getLogger(os.path.basename(__file__).split('.')[0])

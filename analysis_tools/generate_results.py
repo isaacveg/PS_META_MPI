@@ -7,8 +7,11 @@ from datetime import datetime
 # 获取最新的 model_save 文件夹
 model_save = max(glob.glob('./model_save/*/'), key=os.path.getctime)
 
-# 获取最新的 server_log 文件夹
+# 获取最新的 server_log 文件
 server_log = max(glob.glob('./server_log/*server.log'), key=os.path.getctime)
+
+# 获取最新的 config 文件
+config_save = max(glob.glob('./config_save/*'), key=os.path.getctime)
 
 # 获取最新的 clients_log 子文件夹
 clients_log = max(glob.glob('./clients_log/*/'), key=os.path.getctime)
@@ -26,8 +29,7 @@ try:
     shutil.move(model_save, os.path.join(result_dir, 'model_save'))
     shutil.move(server_log, result_dir)
     shutil.move(clients_log, os.path.join(result_dir, 'clients_log'))
-    # 复制一份config文件
-    shutil.copy('./config.yml', result_dir)
+    shutil.move(config_save, result_dir)
 except Exception as e :
     print("Error: ", e)
 
@@ -41,4 +43,7 @@ if not os.listdir('./server_log'):
 if not os.listdir('./clients_log'):
     os.rmdir('./clients_log')
     print("clients_log removed")
+if not os.listdir('./config_save'):
+    os.rmdir('./config_save')
+    print("config_save removed")
     
