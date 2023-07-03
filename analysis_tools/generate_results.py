@@ -30,3 +30,15 @@ try:
     shutil.copy('./config.yml', result_dir)
 except Exception as e :
     print("Error: ", e)
+
+# 如果移动后原文件夹是空的，把它们删除
+if not os.listdir('./model_save'):
+    os.rmdir('./model_save')
+    print("model_save removed")
+if not os.listdir('./server_log'):
+    os.rmdir('./server_log')
+    print("server_log removed")
+if not os.listdir('./clients_log'):
+    os.rmdir('./clients_log')
+    print("clients_log removed")
+    
