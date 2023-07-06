@@ -24,6 +24,10 @@ class ClientConfig:
         self.local_model_path = None
         self.global_model_path = None
         self.train_data_idxes = None
+        # meta training
+        # self.support_data_idxes = None
+        # self.query_data_idxes = None
+        self.test_data_idxes = None
         self.lr = None
         self.aggregate_weight = 0.1
         self.train_time = 0

@@ -35,4 +35,11 @@ TODO
 
 ## Clear ALL log and saved models  
 WARNING: Clear all logs!  
-rm -rf model_save server_log clients_log  __pycache__ 
+rm -rf model_save server_log clients_log config_save  __pycache__ 
+
+
+## Debug
+1. Only the server:
+python server.py
+2. Only the client:
+python client.py

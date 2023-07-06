@@ -53,4 +53,7 @@ def create_model_instance(dataset_type, model_type, class_num=10):
         elif model_type == 'VGG16':
             model = VGG16_IMAGE()
     
+    else:
+        raise ValueError('Not valid dataset')
+    
     return model

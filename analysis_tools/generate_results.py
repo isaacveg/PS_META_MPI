@@ -29,7 +29,7 @@ try:
     shutil.move(model_save, os.path.join(result_dir, 'model_save'))
     shutil.move(server_log, result_dir)
     shutil.move(clients_log, os.path.join(result_dir, 'clients_log'))
-    shutil.move(config_save, result_dir)
+    shutil.move(config_save, os.path.join(result_dir, 'config.yml'))
 except Exception as e :
     print("Error: ", e)
 

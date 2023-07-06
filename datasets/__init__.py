@@ -108,7 +108,25 @@ def create_dataloaders(dataset, batch_size, selected_idxs=None, shuffle=True, pi
         dataloader = DataLoader(partition, batch_size=batch_size,
                                     shuffle=shuffle, pin_memory=pin_memory, num_workers=num_workers)
     
-    return dataloader
+    return DataLoaderHelper(dataloader)
+
+
+class DataLoaderHelper(object):
+    """
+    Manually control next(iter(dataloader)) 
+    """
+    def __init__(self, dataloader):
+        self.loader = dataloader
+        self.dataiter = iter(self.loader)
+
+    def __next__(self):
+        try:
+            data, target = next(self.dataiter)
+        except StopIteration:
+            self.dataiter = iter(self.loader)
+            data, target = next(self.dataiter)
+        
+        return data, target
 
 
 def load_datasets(dataset_type, data_path="/data/docker/data"):
@@ -117,29 +135,5 @@ def load_datasets(dataset_type, data_path="/data/docker/data"):
     """
     dataset_class = getattr(datasets, dataset_type)
     train_dataset, test_dataset = dataset_class.create_dataset(data_path)
-
-    # if dataset_type == 'CIFAR10':
-    #     train_dataset, test_dataset = datasets.CIFAR10.create_dataset(data_path)
-
-    # elif dataset_type == 'CIFAR100':
-    #     train_dataset, test_dataset = datasets.CIFAR100.create_dataset(data_path)
-
-    # elif dataset_type == 'FashionMNIST':
-    #     train_dataset, test_dataset = datasets.FashionMNIST.create_dataset(data_path)
-
-    # elif dataset_type == 'MNIST':
-    #     train_dataset, test_dataset = datasets.MNIST.create_dataset(data_path)
-    
-    # elif dataset_type == 'SVHN':
-    #     train_dataset, test_dataset = datasets.SVHN.create_dataset(data_path)
-
-    # elif dataset_type == 'EMNIST':
-    #     train_dataset, test_dataset = datasets.EMNIST.create_dataset(data_path)
-
-    # elif dataset_type == 'tinyImageNet':
-    #     train_dataset, test_dataset = datasets.tinyImageNet.create_dataset(data_path)
-
-    # elif dataset_type == 'image100':
-    #     train_dataset, test_dataset = datasets.image100.create_dataset(data_path)
 
     return train_dataset, test_dataset

@@ -25,15 +25,15 @@ momentum: 0.9                        # momentum < 0 means the momentum is None
 weight_decay: 0.0005
 
 # meta-learning setting
-meta_method:                   # Methods: reptile\metasgd\fomaml\maml  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
-meta_outer_lr: 0.1
-meta_inner_lr: 0.1
+meta_method:                        # Methods: reptile\metasgd\fomaml\maml  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
+outer_lr: 0.1
+inner_lr: 0.1                  # client lr   
 
 # global control
 client_num: 20                      # total number of clients (not the number of selected clients)
 selected_num: 10                      # the number of selected clients
-epoch_num: 200
-local_iters: 30                      # local training step of the client in each epoch, left blank to calculate
+epoch_num: 500
+local_iters: 10                      # local training step of the client in each epoch, left blank to calculate
 compress_method: random              # compress method, random/top_k/quant, left blank to disable compress
 compress_ratio: 0.5                # compress ratio, only used when method is random/top_k
 

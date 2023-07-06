@@ -3,6 +3,7 @@ import time
 import math
 import re
 import gc
+import copy
 
 import numpy as np
 import torch
@@ -10,31 +11,49 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-
 def train(model, data_loader, optimizer, local_iters=None, device=torch.device("cpu"), model_type=None):
     t_start = time.time()
     model.train()
     if local_iters is None:
-        local_iters = math.ceil(len(data_loader.dataset) / data_loader.batch_size)
+        local_iters = math.ceil(len(data_loader.loader.dataset) / data_loader.loader.batch_size)
     # print("local_iters: ", local_iters)
 
     train_loss = 0.0
     samples_num = 0
 
     for iter_idx in range(local_iters):
-        loss, sample_num = atomic_train(model_type, model, data_loader, device, optimizer)
-        train_loss += (loss.item() * sample_num)
-        samples_num += sample_num
+        data, target = next(data_loader)
+
+        if model_type == 'LR':
+            data = data.squeeze(1).view(-1, 28 * 28)
+            
+        data, target = data.to(device), target.to(device)
+        
+        output = model(data)
+
+        optimizer.zero_grad()
+        
+        loss_func = nn.CrossEntropyLoss() 
+        loss =loss_func(output, target)
+        # print("here")
+        loss.backward()
+        optimizer.step()
+
+        # train_loss += (loss.item() * data.size(0))
+        # samples_num += data.size(0)
+
+        train_loss += (loss.item() * data.size(0))
+        samples_num += data.size(0)
 
     if samples_num != 0:
         train_loss /= samples_num
     
-    return train_loss, time.time()-t_start
+    return {'train_loss': train_loss, 'train_time': time.time()-t_start}
 
 
 def test(model, data_loader, device=torch.device("cpu"), model_type=None):
     model.eval()
-    # data_loader = data_loader.loader
+    data_loader = data_loader.loader
     test_loss = 0.0
     test_accuracy = 0.0
 
@@ -66,30 +85,3 @@ def test(model, data_loader, device=torch.device("cpu"), model_type=None):
     # TODO: Record
 
     return test_loss, test_accuracy
-
-
-
-def atomic_train(model_type, model, data_loader, device, optimizer):
-    """
-    Atomic train function
-    """
-    data, target = next(iter(data_loader))
-
-    if model_type == 'LR':
-        data = data.squeeze(1).view(-1, 28 * 28)
-        
-    data, target = data.to(device), target.to(device)
-    
-    output = model(data)
-
-    optimizer.zero_grad()
-    
-    loss_func = nn.CrossEntropyLoss() 
-    loss =loss_func(output, target)
-    # print("here")
-    loss.backward()
-    optimizer.step()
-
-    # train_loss += (loss.item() * data.size(0))
-    # samples_num += data.size(0)
-    return loss, data.size(0)

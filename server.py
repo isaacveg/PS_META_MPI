@@ -18,7 +18,7 @@ import math
 from config import *
 import torch.nn.functional as F
 import datasets, models
-from training_utils import test
+from training_utils.base import test
 import shutil
 
 from mpi4py import MPI
@@ -47,7 +47,7 @@ if not os.path.exists(CFG_PATH):
     os.makedirs(CFG_PATH, exist_ok=True)
 
 # Copy config and save
-shutil.copy('./config.yml', CFG_PATH)
+shutil.copy('./config.yml', CFG_PATH+ now +'_config.yml')
 
 """init logger"""
 logger = logging.getLogger(os.path.basename(__file__).split('.')[0])
@@ -75,7 +75,7 @@ def main():
     logger.info("Model Size: {} MB".format(model_size))
 
     # Create model instance
-    train_data_partition, partition_sizes = partition_data(
+    train_data_partition, test_data_partition, partition_sizes = partition_data(
         dataset_type=cfg['dataset_type'],
         partition_pattern=cfg['data_partition_pattern'],
         non_iid_ratio=cfg['non_iid_ratio'],
@@ -99,16 +99,14 @@ def main():
         client.params = init_para
         # print(client_idx, client.params.device)
         client.train_data_idxes = train_data_partition.use(client_idx)
+        # partition test dataset to simulate corresponding distribution
+        client.test_data_idxes = test_data_partition.use(client_idx)
         client.local_model_path = MODEL_PATH + now + "_local_" + str(client_idx) + ".model"
         client.global_model_path = GLOBAL_MODEL_PATH
         all_clients.append(client)
 
-    # connect and send init config
-    # communication_parallel(all_clients, 1, comm, action="init")
-
     # recoder: SummaryWriter = SummaryWriter()
     global_model.to(device)
-    # print(global_model.device, "global_model_device")
     _, test_dataset = datasets.load_datasets(cfg['dataset_type'], cfg['dataset_path'])
     test_loader = datasets.create_dataloaders(test_dataset, batch_size=cfg['test_batch_size'], shuffle=False)
 
@@ -163,26 +161,14 @@ def main():
 def aggregate_model_para(global_model, worker_list):
     global_para = torch.nn.utils.parameters_to_vector(global_model.parameters()).detach()
     with torch.no_grad():
-        # normal (or so called Reptile)
-        if cfg['meta_method'] is None: 
-            para_delta = torch.zeros_like(global_para)
-            for worker in worker_list:
-                # print(global_para.device, worker.params.device)
-                model_delta = (worker.params - global_para)
-                #gradient
-                # model_delta = worker.config.neighbor_paras
-                para_delta += worker.aggregate_weight * model_delta
-            global_para += para_delta
-        
-        # First order MAML, use the last update gradients to update
-        elif cfg['meta_method'] == 'fomaml':
-            para_grads = torch.zeros_like(global_para)
-            for worker in worker_list:
-                # add up all grads
-                para_grads += worker.params * worker.aggregate_weight
-            global_para -= para_grads * cfg['meta_outer_lr']
-
-        torch.nn.utils.vector_to_parameters(global_para, global_model.parameters())
+        para_delta = torch.zeros_like(global_para)
+        for worker in worker_list:
+            # print(global_para.device, worker.params.device)
+            model_delta = (worker.params - global_para)
+            #gradient
+            # model_delta = worker.config.neighbor_paras
+            para_delta += worker.aggregate_weight * model_delta
+        global_para += para_delta
     return global_para
 
 
@@ -229,7 +215,7 @@ def partition_data(dataset_type, partition_pattern, non_iid_ratio, client_num=10
     partition_size should be in shape:
     classes_size * client_num, each number is ratio for each class on one client.
     """
-    train_dataset, _ = datasets.load_datasets(dataset_type=dataset_type, data_path=cfg['dataset_path'])
+    train_dataset, test_dataset = datasets.load_datasets(dataset_type=dataset_type, data_path=cfg['dataset_path'])
     partition_sizes = np.ones((cfg['classes_size'], client_num))
     # iid
     # every client has same number of samples and corresponding classes
@@ -283,7 +269,12 @@ def partition_data(dataset_type, partition_pattern, non_iid_ratio, client_num=10
         train_dataset, partition_sizes=partition_sizes, seed=cfg['data_partition_seed']
     )
 
-    return train_data_partition, partition_sizes
+    test_data_partition = datasets.LabelwisePartitioner(
+        test_dataset, partition_sizes=partition_sizes, seed=cfg['data_partition_seed']
+    )
+
+    return train_data_partition, test_data_partition, partition_sizes
+
 
 if __name__ == "__main__":
     main()
