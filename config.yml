@@ -25,9 +25,9 @@ momentum: 0.9                        # momentum < 0 means the momentum is None
 weight_decay: 0.0005
 
 # meta-learning setting
-meta_method:                        # Methods: reptile\metasgd\fomaml\maml  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
+meta_method:   fomaml              # Methods: reptile\mamlhf(hessian free)\fomaml\maml(DONT USE)  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
 outer_lr: 0.1
-inner_lr: 0.1                  # client lr   
+inner_lr: 0.1                     # client lr   
 
 # global control
 client_num: 20                      # total number of clients (not the number of selected clients)
@@ -39,7 +39,7 @@ compress_ratio: 0.5                # compress ratio, only used when method is ra
 
 # CUDA
 server_use_cuda: True
-server_cuda: '1'                    # which gpu to choose for server
+server_cuda: '2'                    # which gpu to choose for server
 client_use_cuda: True
 client_cuda: '-1'                   # '-1' means that client chooses the gpu adaptively according to the process id
 

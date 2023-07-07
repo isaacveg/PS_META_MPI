@@ -1,3 +1,10 @@
+"""
+WARNING: 
+You should NEVER use this method because it will take up n^2 memory! 
+Even model as small as 3830000 params will take up
+ 3830000^2 * 4 / 1024/1024/1024 = 54646 GB memory!
+"""
+
 import sys
 import time
 import math
@@ -12,6 +19,21 @@ import torch.nn.functional as F
 
 
 def train(model, train_loader, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
+    """
+    Trains a model using the MAML algorithm.
+
+    Args:
+        model (torch.nn.Module): The model to train.
+        train_loader (torch.utils.data.DataLoader): The data loader for training.
+        alpha (float): The learning rate for the inner update.
+        beta (float): The learning rate for the outer update.
+        local_iters (int, optional): The number of local iterations. If not provided, it is calculated based on the size of the training data. 
+        device (torch.device, optional): The device on which to perform the training. Defaults to torch.device("cpu").
+        model_type (str, optional): The type of the model. Defaults to None.
+
+    Returns:
+        dict: A dictionary containing the losses during training, the training time, and the model parameters.
+    """
     t_start = time.time()
     model.train()
     
@@ -24,7 +46,7 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
     grad_losses = []
     hessian_losses = []
     
-    for epoch in local_iters:
+    for epoch in range(local_iters):
         origin_model = copy.deepcopy(model)
         final_model = copy.deepcopy(model)
 
@@ -48,7 +70,7 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
         grad_losses.append(grad_loss)
         hessian_losses.append(hessian_loss)
  
-    return {'train_loss': one_step_losses, 
+    return {'one_step_loss': one_step_losses, 
             'grad_loss': grad_losses, 
             'hessian_loss': hessian_losses,
             'train_time': time.time()-t_start,
@@ -141,29 +163,26 @@ def get_hessian(device, data, model, model_type):
     grads = torch.autograd.grad(loss, model.parameters(), retain_graph=True, create_graph=True)
 
     hessian_params = []
-    for k in range(len(grads)):
-        hess_params = torch.zeros_like(grads[k])
-        for i in range(grads[k].size(0)):
-            # w or b?
-            if len(grads[k].size()) == 2:
-                for j in range(grads[k].size(1)):
-                    hess_params[i, j] = torch.autograd.grad(grads[k][i][j], model.parameters(), retain_graph=True)[k][
-                        i, j]
-            else:
-                hess_params[i] = torch.autograd.grad(grads[k][i], model.parameters(), retain_graph=True)[k][i]
-        hessian_params.append(hess_params)
 
-    #     # 将一阶导数展平
-    # grads_flat = torch.cat([grad.view(-1) for grad in grads])
+    # 将一阶导数展平
+    grads_flat = torch.cat([grad.view(-1) for grad in grads])
 
-    # # 计算二阶导数（海森矩阵）
-    # hessian = []
-    # for i, grad in enumerate(grads_flat):
-    #     grad2 = torch.autograd.grad(grad, model.parameters(), retain_graph=True)
-    #     grad2_flat = torch.cat([g.contiguous().view(-1) for g in grad2])
-    #     hessian.append(grad2_flat)
-    # hessian = torch.stack(hessian)
+    # 计算二阶导数（海森矩阵）
+    for i, grad in enumerate(grads_flat):
+        grad2 = torch.autograd.grad(grad, model.parameters(), retain_graph=True)
+        grad2_flat = torch.cat([g.contiguous().view(-1) for g in grad2])
+        hessian_params.append(grad2_flat)
+    hessian_params = torch.stack(hessian_params)
 
-    return hessian_params, loss.item()
+    # 还原成原来的形状
+    new_hessian_params = []
+    start = 0
+    for param in model.parameters():
+        end = start + param.numel()
+        param_hessian = hessian_params[start:end].view(*param.shape, -1)
+        new_hessian_params.append(param_hessian)
+        start = end
+
+    return new_hessian_params, loss.item()
 
 
