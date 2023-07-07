@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 import random
 from config import ClientConfig, cfg
 from comm_utils import *
-import training_utils
+from training_utils import fedavg, fomaml, maml, mamlhf
 import datasets, models
 from mpi4py import MPI
 import logging
@@ -87,7 +87,7 @@ def main():
         loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
 
-        keys_to_send = ["params", "train_time", "send_time"]
+        keys_to_send = ["params", "train_time", "send_time", "lr"]
 
         # 构造需要发送的字典
         config_to_send = {key: getattr(client_config, key) for key in keys_to_send}
@@ -117,18 +117,17 @@ async def local_training(config, train_loader, test_loader, meta_test_loader=Non
         epoch_lr = max(cfg['decay_rate'] * epoch_lr, cfg['min_lr'])
         config.lr = epoch_lr
     logger.info("epoch-{} lr: {}".format(config.epoch_idx, epoch_lr))
-    if cfg['momentum'] < 0:
-        optimizer = optim.SGD(local_model.parameters(), lr=epoch_lr, weight_decay=cfg['weight_decay'])
-    else:
-        optimizer = optim.SGD(local_model.parameters(), momentum=cfg['momentum'], lr=epoch_lr, weight_decay=cfg['weight_decay'])
-
-    trainner = getattr(training_utils, cfg['meta_method'])
 
     if cfg['meta_method']=='fedavg':
-        info_dic = trainner.train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
-    else:
-        # meta_learning
-        info_dic = trainner.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+        if cfg['momentum'] < 0:
+            optimizer = optim.SGD(local_model.parameters(), lr=epoch_lr, weight_decay=cfg['weight_decay'])
+        else:
+            optimizer = optim.SGD(local_model.parameters(), momentum=cfg['momentum'], lr=epoch_lr, weight_decay=cfg['weight_decay'])
+        info_dic = fedavg.train(local_model, train_loader, optimizer, local_steps, device, cfg['model_type'])
+    elif cfg['meta_method']=='fomaml':
+        info_dic = fomaml.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+    elif cfg['meta_method']=='mamlhf':
+        info_dic = mamlhf.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
 
     logger.info(
         "Train_loss: {}\n".format(info_dic["train_loss"])+
@@ -139,14 +138,13 @@ async def local_training(config, train_loader, test_loader, meta_test_loader=Non
     # save params to config for sending back
     config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
 
-    test_loss, test_acc = training_utils.fedavg.test(local_model, test_loader, device, model_type=cfg['model_type'])
+    test_loss, test_acc = fedavg.test(local_model, test_loader, device, model_type=cfg['model_type'])
     logger.info(
         "Test_Loss: {}\n".format(test_loss) +
         "Test_ACC: {}\n".format(test_acc)
     )
 
     logger.info("Save para")
-
     config.epoch_idx += 1
 
 

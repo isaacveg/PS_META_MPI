@@ -45,7 +45,8 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
     if samples_num != 0:
         train_loss /= samples_num
     
-    return {'train_loss': train_loss, 'train_time': time.time()-t_start}
+    return {'train_loss': train_loss, 'train_time': time.time()-t_start,
+            'params': torch.nn.utils.parameters_to_vector(model.parameters()).detach()}
 
 
 def test(model, data_loader, device=torch.device("cpu"), model_type=None):

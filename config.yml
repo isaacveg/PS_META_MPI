@@ -25,7 +25,7 @@ momentum: 0.9                        # momentum < 0 means the momentum is None
 weight_decay: 0.0005
 
 # meta-learning setting
-meta_method:   fedavg              # Methods: fedavg\mamlhf(hessian free)\fomaml\maml(DONT USE)  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
+meta_method:   mamlhf                # Methods: fedavg\mamlhf(hessian free)\fomaml\maml(DONT USE)  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
 outer_lr: 0.1
 inner_lr: 0.1                     # client lr   
 

@@ -69,7 +69,7 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
 
         model = copy.deepcopy(final_model)
 
-        sample_num = [sample_num[0] + batch_1.size(0), sample_num[1] + batch_2.size(0), sample_num[2] + batch_3.size(0)]
+        sample_num = [sample_num[0] + len(batch_1[0]), sample_num[1] + len(batch_2[0]), sample_num[2] + len(batch_3[0])]
         losses = [losses[0] + one_step_loss, losses[1] + grad_loss, losses[2] + hessian_loss]
  
     return {'one_step_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 

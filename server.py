@@ -163,12 +163,10 @@ def aggregate_model_para(global_model, worker_list):
     with torch.no_grad():
         para_delta = torch.zeros_like(global_para)
         for worker in worker_list:
-            # print(global_para.device, worker.params.device)
             model_delta = (worker.params - global_para)
-            #gradient
-            # model_delta = worker.config.neighbor_paras
             para_delta += worker.aggregate_weight * model_delta
         global_para += para_delta
+    torch.nn.utils.vector_to_parameters(global_para, global_model.parameters())
     return global_para
 
 

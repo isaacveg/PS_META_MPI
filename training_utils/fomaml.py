@@ -17,6 +17,26 @@ import torch.nn.functional as F
 
 
 def train(model, train_loader, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
+    """
+    Train a model using the First Order MAML algorithm for a given number of iterations.
+    
+    Args:
+        model: The model to be trained.
+        train_loader: The data loader for training data.
+        alpha: The learning rate for the one-step update.
+        beta: The meta-learning rate for the gradient update.
+        local_iters: The number of local iterations to perform. 
+            If None, default to ceil(len(train_loader.loader.dataset) / train_loader.loader.batch_size / 2).
+        device: The device to run the training on. Defaults to torch.device("cpu").
+        model_type: The type of the model. Defaults to None.
+    
+    Returns:
+        A dictionary containing the following:
+        - train_loss: The average training loss per sample.
+        - grad_loss: The average gradient loss per sample.
+        - train_time: The total training time.
+        - params: The model parameters.
+    """
     t_start = time.time()
     model.train()
     
@@ -40,13 +60,13 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
 
         # step 3: update model
         for param, grad_param in zip(model.parameters(), temp_model.parameters()):
-            param.data.sub_(beta * grad_param.data.grad)
+            param.data.sub_(beta * grad_param.grad.data)
     
         losses = [losses[0]+one_step_loss, losses[1]+grad_loss]
-        sample_num = [sample_num[0]+batch_1.size(0), sample_num[1]+batch_2.size(0)]
+        sample_num = [sample_num[0]+len(batch_1[0]), sample_num[1]+len(batch_2[0])]
         
  
-    return {'one_step_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 
+    return {'train_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 
             'grad_loss': losses[1]/sample_num[1] if sample_num[1] != 0 else losses[1], 
             'train_time': time.time()-t_start,
             'params': torch.nn.utils.parameters_to_vector(model.parameters()).detach()}
