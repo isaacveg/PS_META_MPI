@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 import random
 from config import ClientConfig, cfg
 from comm_utils import *
-from training_utils import base, maml, fomaml
+import training_utils
 import datasets, models
 from mpi4py import MPI
 import logging
@@ -60,7 +60,6 @@ def main():
     train_dataset, test_dataset = datasets.load_datasets(cfg['dataset_type'], cfg['dataset_path'])
     test_loader = datasets.create_dataloaders(test_dataset, batch_size=cfg['client_test_batch_size'], shuffle=False)
 
-    meta_method = cfg['meta_method']
     comm_tag = 1
 
     while True:
@@ -75,17 +74,16 @@ def main():
         # load the test and train loader
         meta_test_loader = datasets.create_dataloaders(
                 test_dataset, batch_size=cfg['client_test_batch_size'], selected_idxs=client_config.test_data_idxes, shuffle=False)
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        # if meta_method is None or meta_method == 'fomaml':
         train_loader = datasets.create_dataloaders(
             train_dataset, batch_size=cfg['local_batch_size'], selected_idxs=client_config.train_data_idxes
         )
-        tasks = [asyncio.ensure_future(local_training(
-        client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger))]
 
         # start local training
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        tasks = [
+            asyncio.ensure_future(local_training(client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger))
+        ]
         loop.run_until_complete(asyncio.wait(tasks))
         loop.close()
 
@@ -124,16 +122,14 @@ async def local_training(config, train_loader, test_loader, meta_test_loader=Non
     else:
         optimizer = optim.SGD(local_model.parameters(), momentum=cfg['momentum'], lr=epoch_lr, weight_decay=cfg['weight_decay'])
 
-    if cfg['meta_method'] is None:
-        info_dic = base.train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
-    elif cfg['meta_method'] == 'fomaml':
-        # fomaml doesn't need queryloader
-        info_dic = fomaml.train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
-    elif cfg['meta_method'] == 'maml':
-        # maml samples 3 batches as 1 update
-        info_dic = maml.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+    trainner = getattr(training_utils, cfg['meta_method'])
 
-    
+    if cfg['meta_method']=='fedavg':
+        info_dic = trainner.train(local_model, train_loader, optimizer, local_iters=local_steps, device=device, model_type=cfg['model_type'])
+    else:
+        # meta_learning
+        info_dic = trainner.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+
     logger.info(
         "Train_loss: {}\n".format(info_dic["train_loss"])+
         "Train_time: {}\n".format(info_dic["train_time"])
@@ -143,7 +139,7 @@ async def local_training(config, train_loader, test_loader, meta_test_loader=Non
     # save params to config for sending back
     config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
 
-    test_loss, test_acc = base.test(local_model, test_loader, device, model_type=cfg['model_type'])
+    test_loss, test_acc = training_utils.fedavg.test(local_model, test_loader, device, model_type=cfg['model_type'])
     logger.info(
         "Test_Loss: {}\n".format(test_loss) +
         "Test_ACC: {}\n".format(test_acc)

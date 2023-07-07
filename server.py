@@ -18,7 +18,7 @@ import math
 from config import *
 import torch.nn.functional as F
 import datasets, models
-from training_utils.base import test
+from training_utils.fedavg import test
 import shutil
 
 from mpi4py import MPI

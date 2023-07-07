@@ -39,9 +39,6 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
         loss.backward()
         optimizer.step()
 
-        # train_loss += (loss.item() * data.size(0))
-        # samples_num += data.size(0)
-
         train_loss += (loss.item() * data.size(0))
         samples_num += data.size(0)
 

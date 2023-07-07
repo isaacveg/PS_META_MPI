@@ -42,20 +42,22 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
         # 3 batches 1 update
         local_iters = math.ceil(len(train_loader.loader.dataset) / train_loader.loader.batch_size / 3)
     
-    one_step_losses = []
-    grad_losses = []
-    hessian_losses = []
+    losses = [0.0, 0.0, 0.0]
+    sample_num = [0,0,0]
     
     for epoch in range(local_iters):
         origin_model = copy.deepcopy(model)
         final_model = copy.deepcopy(model)
 
         # step1, one step on one batch, middle model
-        model, one_step_loss = one_step(device, next(train_loader), model, model_type, lr=alpha)
+        batch_1 = next(train_loader)
+        model, one_step_loss = one_step(device, batch_1, model, model_type, lr=alpha)
         # step2, get grad on next batch
-        model, grad_loss = get_grad(device, next(train_loader), model, model_type)
+        batch_2 = next(train_loader)
+        model, grad_loss = get_grad(device, batch_2, model, model_type)
         # step3, get hessian on third batch using original model
-        hessian_params, hessian_loss = get_hessian(device, next(train_loader), origin_model, model_type)
+        batch_3 = next(train_loader)
+        hessian_params, hessian_loss = get_hessian(device, batch_3, origin_model, model_type)
         # step 4
         cnt = 0
         for param, param_grad in zip(final_model.parameters(), model.parameters()):
@@ -66,13 +68,13 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
             param.data = param.data - beta * grad
 
         model = copy.deepcopy(final_model)
-        one_step_losses.append(one_step_loss)
-        grad_losses.append(grad_loss)
-        hessian_losses.append(hessian_loss)
+
+        sample_num = [sample_num[0] + batch_1.size(0), sample_num[1] + batch_2.size(0), sample_num[2] + batch_3.size(0)]
+        losses = [losses[0] + one_step_loss, losses[1] + grad_loss, losses[2] + hessian_loss]
  
-    return {'one_step_loss': one_step_losses, 
-            'grad_loss': grad_losses, 
-            'hessian_loss': hessian_losses,
+    return {'one_step_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 
+            'grad_loss': losses[1]/sample_num[1] if sample_num[1] != 0 else losses[1], 
+            'hessian_loss': losses[2]/sample_num[2] if sample_num[2] != 0 else losses[2],
             'train_time': time.time()-t_start,
             'params': torch.nn.utils.parameters_to_vector(model.parameters()).detach()}
 

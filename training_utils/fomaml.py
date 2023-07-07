@@ -1,3 +1,8 @@
+"""
+Use first order approximation of hessian
+O(n) complexity, feasible. 
+"""
+
 import sys
 import time
 import math
@@ -11,43 +16,95 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def fomaml(model, data_loader, optimizer, local_iters=None, device=torch.device("cpu"), model_type=None):
+def train(model, train_loader, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
     t_start = time.time()
     model.train()
+    
+    # First Order MAML train for local_ites
     if local_iters is None:
-        local_iters = math.ceil(len(data_loader.dataset) / data_loader.batch_size)
-    # print("local_iters: ", local_iters)
-
-    train_loss = 0.0
-    samples_num = 0
-
+        # 2 batches 1 update
+        local_iters = math.ceil(len(train_loader.loader.dataset) / train_loader.loader.batch_size / 2)
     
-    for iter_idx in range(local_iters):
-        data, target = next(iter(data_loader))
+    losses = [0.0, 0.0]
+    sample_num = [0,0]
 
-        if model_type == 'LR':
-            data = data.squeeze(1).view(-1, 28 * 28)
-            
-        data, target = data.to(device), target.to(device)
-        
-        output = model(data)
+    for epoch in range(local_iters):
+        temp_model = copy.deepcopy(model)
+        # step 1: one step train
+        batch_1 = next(train_loader)
+        temp_model, one_step_loss = one_step(device, batch_1, temp_model, model_type, lr=alpha)
 
-        optimizer.zero_grad()
-        
-        loss_func = nn.CrossEntropyLoss() 
-        loss =loss_func(output, target)
-        # print("here")
-        loss.backward()
-        optimizer.step()
+        # step 2: get grad
+        batch_2 = next(train_loader)
+        temp_model, grad_loss = get_grad(device, batch_2, model, model_type)
 
-        # train_loss += (loss.item() * data.size(0))
-        # samples_num += data.size(0)
-
-        train_loss += (loss.item() * data.size(0))
-        samples_num += data.size(0)
-
-    if samples_num != 0:
-        train_loss /= samples_num
+        # step 3: update model
+        for param, grad_param in zip(model.parameters(), temp_model.parameters()):
+            param.data.sub_(beta * grad_param.data.grad)
     
-    return {'train_loss': train_loss, 'train_time': time.time()-t_start}
+        losses = [losses[0]+one_step_loss, losses[1]+grad_loss]
+        sample_num = [sample_num[0]+batch_1.size(0), sample_num[1]+batch_2.size(0)]
+        
+ 
+    return {'one_step_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 
+            'grad_loss': losses[1]/sample_num[1] if sample_num[1] != 0 else losses[1], 
+            'train_time': time.time()-t_start,
+            'params': torch.nn.utils.parameters_to_vector(model.parameters()).detach()}
 
+
+def one_step(device, data, model, model_type, lr):
+    """
+    Performs one step of training for a given device, data, model, and learning rate.
+
+    Args:
+        device (torch.device): The device (CPU or GPU) on which to perform the calculations.
+        data (tuple): A tuple containing the input sequence (seq) and corresponding label (label).
+        model (torch.nn.Module): The model to train.
+        lr (float): The learning rate for the optimizer.
+
+    Returns:
+        tuple: A tuple containing the updated model and the loss value as a float.
+    """
+    seq, label = data
+
+    if model_type == 'LR':
+        seq = data.squeeze(1).view(-1, 28 * 28)
+
+    seq = seq.to(device)
+    label = label.to(device)
+    y_pred = model(seq)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    loss_function = nn.CrossEntropyLoss().to(device)
+    loss = loss_function(y_pred, label)
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    return model, loss.item()
+
+
+def get_grad(device, data, model, model_type):
+    """
+        Calculate the gradient of the given model with respect to the input data.
+
+        Parameters:
+            device (torch.device): The device on which the computation will be performed.
+            data (Tuple[torch.Tensor, torch.Tensor]): The input data and its corresponding labels.
+            model (torch.nn.Module): The model for which the gradient will be calculated.
+
+        Returns:
+            Tuple[torch.nn.Module, float]: A tuple containing the updated model and the loss value as a float.
+    """
+    seq, label = data
+    
+    if model_type == 'LR':
+        seq = data.squeeze(1).view(-1, 28 * 28)
+
+    seq = seq.to(device)
+    label = label.to(device)
+    y_pred = model(seq)
+    loss_function = nn.CrossEntropyLoss().to(device)
+    loss = loss_function(y_pred, label)
+    loss.backward()
+
+    return model, loss.item()
