@@ -18,7 +18,7 @@ import math
 from config import *
 import torch.nn.functional as F
 import datasets, models
-from training_utils.fedavg import test
+from training_utils.base import test
 import shutil
 
 from mpi4py import MPI
@@ -59,7 +59,7 @@ formatter = logging.Formatter("%(message)s")
 fileHandler.setFormatter(formatter)
 logger.addHandler(fileHandler)
 
-comm_tags = np.ones(cfg['selected_num'] + 1)
+comm_tags = np.ones(cfg['client_num'] + 1)
 
 def main():
     client_num = cfg['client_num']
@@ -96,6 +96,8 @@ def main():
     for client_idx in range(client_num):
         client = ClientConfig(client_idx)
         client.lr = cfg['lr']
+        client.inner_lr = cfg['inner_lr']
+        client.outer_lr = cfg['outer_lr']
         client.params = init_para
         # print(client_idx, client.params.device)
         client.train_data_idxes = train_data_partition.use(client_idx)
@@ -114,13 +116,20 @@ def main():
     best_acc = 0.0
     best_loss = 0.0
 
+    selected_num, eval_num = cfg['selected_num'], cfg['eval_clients_num']
+    eval_client_idxes = sample(range(client_num), eval_num)
+    training_clients_idxes = list(set(range(client_num)) - set(eval_client_idxes))
+    logger.info("Eval client idxes: {}".format(eval_client_idxes))
+    print("Eval client idxes: {}".format(eval_client_idxes))
+
     for epoch_idx in range(1, 1 + cfg['epoch_num']):
         logger.info("_____****_____\nEpoch: {:04d}".format(epoch_idx))
         print("_____****_____\nEpoch: {:04d}".format(epoch_idx))
 
         # The client selection algorithm can be implemented
-        selected_num = cfg['selected_num']
-        selected_client_idxes = sample(range(client_num), selected_num)
+        # selected_num = cfg['selected_num']
+        # selected_client_idxes = sample(range(client_num), selected_num)
+        selected_client_idxes = sample(training_clients_idxes, selected_num)
         logger.info("Selected client idxes: {}".format(selected_client_idxes))
         print("Selected client idxes: {}".format(selected_client_idxes))
         selected_clients = []
@@ -129,14 +138,32 @@ def main():
             all_clients[client_idx].params = torch.nn.utils.parameters_to_vector(global_model.parameters()).detach()
             selected_clients.append(all_clients[client_idx])
 
+        eval_clients = []
+        # eval every cfg['eval_round']
+        if epoch_idx % cfg['eval_round'] == 0:
+            for client_idx in eval_client_idxes:
+                all_clients[client_idx].epoch_idx = epoch_idx
+                all_clients[client_idx].is_eval = True
+                all_clients[client_idx].params = torch.nn.utils.parameters_to_vector(global_model.parameters()).detach()
+                eval_clients.append(all_clients[client_idx])
+
+        # tracked clients = selected + eval
+        tracked_clients = selected_clients + eval_clients
         # send the configurations to the selected clients
-        communication_parallel(selected_clients, action="send_config")
+        # communication_parallel(selected_clients, action="send_config")
+        communication_parallel(tracked_clients, action="send_config")
         print("send success")
         # when all selected clients have completed local training, receive their configurations
-        communication_parallel(selected_clients, action="get_config")
+        communication_parallel(tracked_clients, action="get_config")
         print("get success")
         # aggregate the clients' local model parameters
-        aggregate_model_para(global_model, selected_clients)   
+        aggregate_model_para(global_model, selected_clients) 
+        # check the eval results 
+        if cfg['eval_while_training'] :
+            check_eval_results(selected_clients)
+        if epoch_idx % cfg['eval_round'] == 0:
+            logger.info("Evaling clients: {}".format(eval_client_idxes))
+            check_eval_results(eval_clients)
         # test and save the best global model
         test_loss, test_acc = test(global_model, test_loader, device, cfg['model_type'])
 
@@ -153,9 +180,25 @@ def main():
             "Best_Epoch: {:04d}\n".format(best_epoch)
         )
 
-        for m in range(len(selected_clients)):
+        for m in range(len(tracked_clients)):
             comm_tags[m + 1] += 1
 
+
+def check_eval_results(eval_clients):
+    # eval clients info
+    acc_before, acc_after = [], []
+    loss_before, loss_after = [], []
+    for client in eval_clients:
+        acc_before.append(client.acc_bf_adpt)
+        acc_after.append(client.acc_af_adpt)
+        loss_before.append(client.loss_bf_adpt)
+        loss_after.append(client.loss_af_adpt)
+    result_str = "Eval Acc Before Adaptation: {:.4f}\n".format(np.mean(acc_before))+\
+                "Eval Acc After Adaptation: {:.4f}\n".format(np.mean(acc_after))+\
+                "Eval Loss Before Adaptation: {:.4f}\n".format(np.mean(loss_before))+\
+                "Eval Loss After Adaptation: {:.4f}\n".format(np.mean(loss_after))
+    logger.info(result_str)
+    print(result_str)
 
 
 def aggregate_model_para(global_model, worker_list):

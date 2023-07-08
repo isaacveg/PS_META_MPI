@@ -20,7 +20,7 @@ Federated Meta-learning version of isaacveg/PS_MPI
 
 
 ## Run
-The number after should be larger than config.yml:num_workers  
+The number after should be larger than config.yml : selected_num + eval_clients_num  
 mpiexec --oversubscribe -n 1 python server.py : -n 10 python client.py  
 
 

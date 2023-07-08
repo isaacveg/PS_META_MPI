@@ -26,20 +26,24 @@ weight_decay: 0.0005
 
 # meta-learning setting
 meta_method:   mamlhf                # Methods: fedavg\mamlhf(hessian free)\fomaml\maml(DONT USE)  Leave blank to remain FedAvg. Reptile actually the same as FedAvg
-outer_lr: 0.1
-inner_lr: 0.1                     # client lr   
+outer_lr: 0.05                     # lr \beta  
+inner_lr: 0.1                     # lr \alpha
+eval_clients_num: 2              # how many clients only used for eval
+eval_while_training: True         # whether to eval while training
+eval_round: 1                    # how many epochs meta test once, default 1
+adapt_steps: 10                    # epochs of adaptation before eval
 
 # global control
 client_num: 20                      # total number of clients (not the number of selected clients)
 selected_num: 10                      # the number of selected clients
-epoch_num: 500
+epoch_num: 100
 local_iters: 10                      # local training step of the client in each epoch, left blank to calculate
 compress_method: random              # compress method, random/top_k/quant, left blank to disable compress
 compress_ratio: 0.5                # compress ratio, only used when method is random/top_k
 
 # CUDA
 server_use_cuda: True
-server_cuda: '2'                    # which gpu to choose for server
+server_cuda: '1'                    # which gpu to choose for server
 client_use_cuda: True
 client_cuda: '-1'                   # '-1' means that client chooses the gpu adaptively according to the process id
 

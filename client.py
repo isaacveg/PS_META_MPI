@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 import random
 from config import ClientConfig, cfg
 from comm_utils import *
-from training_utils import fedavg, fomaml, maml, mamlhf
+from training_utils import base, fomaml, maml, mamlhf
 import datasets, models
 from mpi4py import MPI
 import logging
@@ -79,15 +79,22 @@ def main():
         )
 
         # start local training
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        tasks = [
-            asyncio.ensure_future(local_training(client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger))
-        ]
-        loop.run_until_complete(asyncio.wait(tasks))
-        loop.close()
+        # loop = asyncio.new_event_loop()
+        # asyncio.set_event_loop(loop)
+        # tasks = [
+        #     asyncio.ensure_future(
+        #         local_training(client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger))
+        # ]
+        # loop.run_until_complete(asyncio.wait(tasks))
+        # loop.close()
+        local_training(client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger)
 
-        keys_to_send = ["params", "train_time", "send_time", "lr"]
+        keys_to_send = ["lr", "inner_lr", "outer_lr"]
+        if cfg['eval_while_training'] or client_config.is_eval:
+            extended_info = ["adapt_time", "acc_bf_adpt", "loss_bf_adpt", "acc_af_adpt", "loss_af_adpt"]
+            keys_to_send.extend(extended_info)
+        if client_config.is_eval == False:
+            keys_to_send.append("params")
 
         # 构造需要发送的字典
         config_to_send = {key: getattr(client_config, key) for key in keys_to_send}
@@ -101,44 +108,61 @@ def main():
 
 
 
-async def local_training(config, train_loader, test_loader, meta_test_loader=None, logger=None):
-    local_model = models.create_model_instance(cfg['dataset_type'], cfg['model_type'], cfg['classes_size'])
+# async def local_training(config, train_loader, test_loader, meta_test_loader=None, logger=None):
+def local_training(config, train_loader, test_loader, meta_test_loader=None, logger=None):
+    local_model = models.create_model_instance(
+        cfg['dataset_type'], cfg['model_type'], cfg['classes_size'])
     torch.nn.utils.vector_to_parameters(config.params, local_model.parameters())
     local_model.to(device)
 
-    if cfg['meta_method'] is not None:
-        # set up inner lr
-        config.lr = cfg['inner_lr']
+    epoch_lr, inner_lr, outer_lr = config.lr, config.inner_lr, config.outer_lr
+    local_steps, adapt_steps = cfg['local_iters'], cfg['adapt_steps']
 
-    epoch_lr = config.lr
-    local_steps = cfg['local_iters']
-
+    # update lr 
     if config.epoch_idx > 1:
-        epoch_lr = max(cfg['decay_rate'] * epoch_lr, cfg['min_lr'])
-        config.lr = epoch_lr
-    logger.info("epoch-{} lr: {}".format(config.epoch_idx, epoch_lr))
+        epoch_lr, inner_lr, outer_lr = [max(lr*cfg['decay_rate'], cfg['min_lr']) for lr in [epoch_lr, inner_lr, outer_lr]]
+        config.lr, config.inner_lr, config.outer_lr = epoch_lr, inner_lr, outer_lr
+    logger.info("epoch-{} lr: {} inner_lr {} outer_lr {}".format(
+        config.epoch_idx, epoch_lr, inner_lr, outer_lr))
 
-    if cfg['meta_method']=='fedavg':
-        if cfg['momentum'] < 0:
-            optimizer = optim.SGD(local_model.parameters(), lr=epoch_lr, weight_decay=cfg['weight_decay'])
-        else:
-            optimizer = optim.SGD(local_model.parameters(), momentum=cfg['momentum'], lr=epoch_lr, weight_decay=cfg['weight_decay'])
-        info_dic = fedavg.train(local_model, train_loader, optimizer, local_steps, device, cfg['model_type'])
-    elif cfg['meta_method']=='fomaml':
-        info_dic = fomaml.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
-    elif cfg['meta_method']=='mamlhf':
-        info_dic = mamlhf.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
-
-    logger.info(
-        "Train_loss: {}\n".format(info_dic["train_loss"])+
-        "Train_time: {}\n".format(info_dic["train_time"])
-    )
-    config.train_time = info_dic["train_time"]
-
-    # save params to config for sending back
-    config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
-
-    test_loss, test_acc = fedavg.test(local_model, test_loader, device, model_type=cfg['model_type'])
+    # if eval or eval while training
+    if config.is_eval or cfg['eval_while_training']:
+        # before adaptation
+        test_loss, test_acc = base.test(local_model, meta_test_loader, device, model_type=cfg['model_type'])
+        config.acc_bf_adpt, config.loss_bf_adpt = test_acc, test_loss
+        logger.info("eval_acc_before_adaptation: {}, eval_loss_before_adaptation: {}".format(
+            test_acc, test_loss))
+    # Training clients
+    if config.is_eval == False:
+        if cfg['meta_method']=='fedavg':
+            info_dic = base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
+        elif cfg['meta_method']=='fomaml':
+            info_dic = fomaml.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+        elif cfg['meta_method']=='mamlhf':
+            info_dic = mamlhf.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+        # save params to config for sending back
+        config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
+        logger.info(
+            "Train_loss: {}\n".format(info_dic["train_loss"])+
+            "Train_time: {}\n".format(info_dic["train_time"])
+        )
+        config.train_time = info_dic["train_time"]
+    
+    # training and eval clients:
+    if config.is_eval or cfg['eval_while_training']:
+        # after adaptation
+        info_dic=base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, adapt_steps, device, cfg['model_type'])
+        test_loss, test_acc = base.test(local_model, meta_test_loader, device, model_type=cfg['model_type'])
+        config.acc_af_adpt, config.loss_af_adpt = test_acc, test_loss
+        logger.info("eval_acc_after_adaptation: {}, eval_loss_after_adaptation: {}".format(
+            test_acc, test_loss))
+        logger.info(
+            "Adapt_loss: {}\n".format(info_dic["train_loss"])+
+            "Adapt_time: {}\n".format(info_dic["train_time"])
+        )
+        config.adapt_time = info_dic["train_time"]
+        
+    test_loss, test_acc = base.test(local_model, test_loader, device, cfg['model_type'])
     logger.info(
         "Test_Loss: {}\n".format(test_loss) +
         "Test_ACC: {}\n".format(test_acc)
@@ -153,8 +177,12 @@ async def local_training(config, train_loader, test_loader, meta_test_loader=Non
 def init_logger(comm_tag, client_config):
     logger = logging.getLogger(os.path.basename(__file__).split('.')[0] + str(comm_tag))
     logger.setLevel(logging.INFO)
-    filename = RESULT_PATH + now + "_" + os.path.basename(__file__).split('.')[0] + '_' + str(
-        client_config.idx) + '.log'
+    if client_config.is_eval:
+        filename = RESULT_PATH + now + "_" + os.path.basename(__file__).split('.')[0] + '_eval_' + str(
+            client_config.idx) + '.log'
+    else:
+        filename = RESULT_PATH + now + "_" + os.path.basename(__file__).split('.')[0] + '_' + str(
+            client_config.idx) + '.log'
     file_handler = logging.FileHandler(filename=filename)
     formatter = logging.Formatter("%(message)s")
     file_handler.setFormatter(formatter)

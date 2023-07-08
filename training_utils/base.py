@@ -11,18 +11,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def train(model, data_loader, optimizer, local_iters=None, device=torch.device("cpu"), model_type=None):
+def train(model, data_loader, momentum, weight_decay, lr, local_iters=None, device=torch.device("cpu"), model_type=None):
     t_start = time.time()
     model.train()
     if local_iters is None:
         local_iters = math.ceil(len(data_loader.loader.dataset) / data_loader.loader.batch_size)
     # print("local_iters: ", local_iters)
 
+    if momentum < 0:
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay)
+    else:
+        optimizer = torch.optim.SGD(model.parameters(), momentum=momentum, lr=lr, weight_decay=weight_decay)
+
+    # print("here bf train")
     train_loss = 0.0
     samples_num = 0
 
     for iter_idx in range(local_iters):
         data, target = next(data_loader)
+        # print("here after data")
 
         if model_type == 'LR':
             data = data.squeeze(1).view(-1, 28 * 28)
@@ -33,8 +40,8 @@ def train(model, data_loader, optimizer, local_iters=None, device=torch.device("
 
         optimizer.zero_grad()
         
-        loss_func = nn.CrossEntropyLoss() 
-        loss =loss_func(output, target)
+        loss_func = nn.CrossEntropyLoss().to(device) 
+        loss = loss_func(output, target)
         # print("here")
         loss.backward()
         optimizer.step()

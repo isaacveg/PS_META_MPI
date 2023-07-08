@@ -26,8 +26,18 @@ class ClientConfig:
         self.train_data_idxes = None
         # meta training
         self.test_data_idxes = None
+        self.is_eval = False
+        # training information
+        self.acc_bf_adpt = None
+        self.loss_bf_adpt = None
+        self.acc_af_adpt = None
+        self.loss_af_adpt = None
+
         self.lr = None
+        self.inner_lr = None
+        self.outer_lr = None
         self.aggregate_weight = 0.1
         self.train_time = 0
+        self.adapt_time = None  
         self.send_time = 0
         self.seed = None
