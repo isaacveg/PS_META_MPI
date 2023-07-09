@@ -25,6 +25,7 @@ from mpi4py import MPI
 
 import logging
 
+VERBOSE = True
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ['CUDA_VISIBLE_DEVICES'] = cfg['server_cuda']
@@ -88,9 +89,8 @@ def main():
             s += "{:.2f}".format(partition_sizes[i][j]) + " "
         logger.info(s)
 
-    # print(init_para.device)
     init_para = init_para.to(device)
-    # print(init_para.device)
+
     # create workers
     all_clients: List[ClientConfig] = list()
     for client_idx in range(client_num):
@@ -99,7 +99,6 @@ def main():
         client.inner_lr = cfg['inner_lr']
         client.outer_lr = cfg['outer_lr']
         client.params = init_para
-        # print(client_idx, client.params.device)
         client.train_data_idxes = train_data_partition.use(client_idx)
         # partition test dataset to simulate corresponding distribution
         client.test_data_idxes = test_data_partition.use(client_idx)
@@ -120,7 +119,7 @@ def main():
     eval_client_idxes = sample(range(client_num), eval_num)
     training_clients_idxes = list(set(range(client_num)) - set(eval_client_idxes))
     logger.info("Eval client idxes: {}".format(eval_client_idxes))
-    print("Eval client idxes: {}".format(eval_client_idxes))
+    if VERBOSE:print("Eval client idxes: {}".format(eval_client_idxes))
 
     for epoch_idx in range(1, 1 + cfg['epoch_num']):
         logger.info("_____****_____\nEpoch: {:04d}".format(epoch_idx))
@@ -131,7 +130,7 @@ def main():
         # selected_client_idxes = sample(range(client_num), selected_num)
         selected_client_idxes = sample(training_clients_idxes, selected_num)
         logger.info("Selected client idxes: {}".format(selected_client_idxes))
-        print("Selected client idxes: {}".format(selected_client_idxes))
+        if VERBOSE:print("Selected client idxes: {}".format(selected_client_idxes))
         selected_clients = []
         for client_idx in selected_client_idxes:
             all_clients[client_idx].epoch_idx = epoch_idx
@@ -152,14 +151,14 @@ def main():
         # send the configurations to the selected clients
         # communication_parallel(selected_clients, action="send_config")
         communication_parallel(tracked_clients, action="send_config")
-        print("send success")
+        if VERBOSE: print("send success")
         # when all selected clients have completed local training, receive their configurations
         communication_parallel(tracked_clients, action="get_config")
-        print("get success")
+        if VERBOSE: print("get success")
         # aggregate the clients' local model parameters
         aggregate_model_para(global_model, selected_clients) 
         # check the eval results 
-        if cfg['eval_while_training'] :
+        if cfg['eval_while_training'] and epoch_idx % cfg['eval_round'] == 0:
             check_eval_results(selected_clients)
         if epoch_idx % cfg['eval_round'] == 0:
             logger.info("Evaling clients: {}".format(eval_client_idxes))
@@ -198,7 +197,8 @@ def check_eval_results(eval_clients):
                 "Eval Loss Before Adaptation: {:.4f}\n".format(np.mean(loss_before))+\
                 "Eval Loss After Adaptation: {:.4f}\n".format(np.mean(loss_after))
     logger.info(result_str)
-    print(result_str)
+    if VERBOSE:
+        print(result_str)
 
 
 def aggregate_model_para(global_model, worker_list):
@@ -230,10 +230,12 @@ def communication_parallel(client_list, action):
     tasks = []
     for m, client in enumerate(client_list): 
         if action == "send_config":
-            print("sending to worker {}, tags {}".format(m+1, comm_tags[m+1]))
+            if VERBOSE:
+                print("sending to worker {}, tags {}".format(m+1, comm_tags[m+1]))
             task = asyncio.ensure_future(send_config(client, m + 1, comm_tags[m+1]))
         elif action == "get_config":
-            print("get worker {}, tags {}".format(m+1, comm_tags[m+1]))
+            if VERBOSE:
+                print("get worker {}, tags {}".format(m+1, comm_tags[m+1]))
             task = asyncio.ensure_future(get_config(client, m + 1, comm_tags[m+1]))
         else:
             raise ValueError('Not valid action')
