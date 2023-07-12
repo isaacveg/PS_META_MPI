@@ -8,7 +8,7 @@ model_type: 'AlexNet'
 dataset_type: 'CIFAR10'             # "MNIST", "CIFAR10","CIFAR100", "EMNIST", "FashionMNIST", "image100"
 data_shape: [1, 8776]             # MNIST is [1, 28, 28], CIFAR10 is [3, 32, 32] and image100 is [3, 144, 144]
 classes_size: 10                    # MNIST is 10, CIFAR10 is 10, image100 is 100
-data_partition_pattern: 0          # 0, 1, or 2. (0 is iid while 1 and 2 are both non-iid)
+data_partition_pattern: 1          # 0, 1, or 2. (0 is iid while 1 and 2 are both non-iid)
 non_iid_ratio: 7                    # make sure: 0 < non_iid_ratio < 10
 min_threshold: 4
 
@@ -25,7 +25,7 @@ momentum: 0.9                        # momentum < 0 means the momentum is None
 weight_decay: 0.0005
 
 # meta-learning setting
-meta_method:   reptile                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
+meta_method:   fomaml                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
 outer_lr: 0.1                     # lr \beta  
 inner_lr: 0.01                     # lr \alpha
 eval_clients_num: 2              # how many clients only used for eval

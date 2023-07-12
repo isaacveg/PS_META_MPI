@@ -20,6 +20,8 @@ draw_requirements = {
     ,'inner_lr': [0.1, 0.01]
     ,'outer_lr': [0.01, 0.05]
     ,'epoch_num': [200]
+    ,'data_partition_pattern':[0,1,2]
+    ,'non_iid_ratio': [0, 7]
 }
 
 draw_contents = [
