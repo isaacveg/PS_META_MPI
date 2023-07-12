@@ -23,7 +23,7 @@ draw_requirements = {
 }
 
 draw_contents = [
-    'train_acc',
+    'train_acc'
     ,'train_loss'
     ,'eval_acc'
     ,'eval_loss'
@@ -60,49 +60,49 @@ def main():
     # fig_train, fig_eval, fig_test = plt.figure(), plt.figure(), plt.figure()
     for idx, cfg in acquired_cfgs:
         if 'train_acc' in draw_contents:
-            # plt.figure()
+            plt.figure()
             # 获取每个epoch的eval_acc_before和eval_acc_after的值和epoch_cnt
             t, _, _ = process_server_log(server_logs[idx])
-            draw_and_save(t, 'train_acc', cfg)
-            # eval_acc_before = [(d.get('eval_acc_before')[0], d.get('eval_acc_before')[1]) for d in t]
-            # eval_acc_after = [(d.get('eval_acc_after')[0], d.get('eval_acc_after')[1]) for d in t]
+            # draw_and_save(t, 'train_acc', cfg)
+            eval_acc_before = [(d.get('eval_acc_before')[0], d.get('eval_acc_before')[1]) for d in t]
+            eval_acc_after = [(d.get('eval_acc_after')[0], d.get('eval_acc_after')[1]) for d in t]
 
-            # # 分离epoch_cnt和eval_acc_before和eval_acc_after的值
-            # epochs, eval_acc_before_values = zip(*eval_acc_before)
-            # _, eval_acc_after_values = zip(*eval_acc_after)
+            # 分离epoch_cnt和eval_acc_before和eval_acc_after的值
+            epochs, eval_acc_before_values = zip(*eval_acc_before)
+            _, eval_acc_after_values = zip(*eval_acc_after)
 
-            # # 绘制eval_acc_before和eval_acc_after
-            # plt.plot(epochs, eval_acc_before_values, label='eval_acc_before')
-            # plt.plot(epochs, eval_acc_after_values, label='eval_acc_after')
-            # plt.xlabel('Epochs')
-            # plt.ylabel('Accuracy')
-            # plt.title('Training Evaluation Accuracy')
-            # plt.legend()
-            # result_str = "_".join([ str(cfg[item]) for item in draw_requirements.keys()])
-            # plt.savefig(plot_root+'/train_acc_{}.png'.format(result_str))
+            # 绘制eval_acc_before和eval_acc_after
+            plt.plot(epochs, eval_acc_before_values, label='eval_acc_before')
+            plt.plot(epochs, eval_acc_after_values, label='eval_acc_after')
+            plt.xlabel('Epochs')
+            plt.ylabel('Accuracy')
+            plt.title('Training Evaluation Accuracy')
+            plt.legend()
+            result_str = "_".join([ str(cfg[item]) for item in draw_requirements.keys()])
+            plt.savefig(plot_root+'/train_acc_{}.png'.format(result_str))
         
     
 
-def draw_train_acc(t, requirement, cfg):
-    plt.figure()
-    # 获取每个epoch的eval_acc_before和eval_acc_after的值和epoch_cnt
-    # t, _, _ = process_server_log(server_logs[idx])
-    eval_acc_before = [(d.get('eval_acc_before')[0], d.get('eval_acc_before')[1]) for d in t]
-    eval_acc_after = [(d.get('eval_acc_after')[0], d.get('eval_acc_after')[1]) for d in t]
+# def draw_train_acc(t, requirement, cfg):
+#     plt.figure()
+#     # 获取每个epoch的eval_acc_before和eval_acc_after的值和epoch_cnt
+#     # t, _, _ = process_server_log(server_logs[idx])
+#     eval_acc_before = [(d.get('eval_acc_before')[0], d.get('eval_acc_before')[1]) for d in t]
+#     eval_acc_after = [(d.get('eval_acc_after')[0], d.get('eval_acc_after')[1]) for d in t]
 
-    # 分离epoch_cnt和eval_acc_before和eval_acc_after的值
-    epochs, eval_acc_before_values = zip(*eval_acc_before)
-    _, eval_acc_after_values = zip(*eval_acc_after)
+#     # 分离epoch_cnt和eval_acc_before和eval_acc_after的值
+#     epochs, eval_acc_before_values = zip(*eval_acc_before)
+#     _, eval_acc_after_values = zip(*eval_acc_after)
 
-    # 绘制eval_acc_before和eval_acc_after
-    plt.plot(epochs, eval_acc_before_values, label='eval_acc_before')
-    plt.plot(epochs, eval_acc_after_values, label='eval_acc_after')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.title('Training Evaluation Accuracy')
-    plt.legend()
-    result_str = "_".join([ str(cfg[item]) for item in draw_requirements.keys()])
-    plt.savefig(plot_root+'/train_acc_{}.png'.format(result_str))
+#     # 绘制eval_acc_before和eval_acc_after
+#     plt.plot(epochs, eval_acc_before_values, label='eval_acc_before')
+#     plt.plot(epochs, eval_acc_after_values, label='eval_acc_after')
+#     plt.xlabel('Epochs')
+#     plt.ylabel('Accuracy')
+#     plt.title('Training Evaluation Accuracy')
+#     plt.legend()
+#     result_str = "_".join([ str(cfg[item]) for item in draw_requirements.keys()])
+#     plt.savefig(plot_root+'/train_acc_{}.png'.format(result_str))
 
 
 def process_server_log(filename):
