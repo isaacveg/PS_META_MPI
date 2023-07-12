@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 import random
 from config import ClientConfig, cfg
 from comm_utils import *
-from training_utils import base, fomaml, maml, mamlhf
+from training_utils import base, fomaml, reptile, mamlhf
 import datasets, models
 from mpi4py import MPI
 import logging
@@ -134,11 +134,17 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
     # Training clients
     if config.is_eval == False:
         if cfg['meta_method']=='fedavg':
-            info_dic = base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
+            info_dic = base.train(
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='fomaml':
-            info_dic = fomaml.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+            info_dic = fomaml.train(
+                local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='mamlhf':
-            info_dic = mamlhf.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+            info_dic = mamlhf.train(
+                local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+        elif cfg['meta_method']=='reptile':
+            info_dic = reptile.train(
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
         # save params to config for sending back
         config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
         logger.info(
