@@ -16,7 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 import random
 from config import ClientConfig, cfg
 from comm_utils import *
-from training_utils import base, fomaml, maml, mamlhf
+from training_utils import base, fomaml, reptile, mamlhf
 import datasets, models
 from mpi4py import MPI
 import logging
@@ -39,6 +39,8 @@ else:
 device = torch.device("cuda" if cfg['client_use_cuda'] and torch.cuda.is_available() else "cpu")
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
+VERBOSE = True
 
 # init logger
 now = time.strftime("%Y-%m-%d-%H_%M_%S",time.localtime(time.time()))
@@ -65,7 +67,8 @@ def main():
     while True:
         # receive the configuration from the server
         communicate_with_server(client_config, comm_tag, action='get_config')
-        print("client {}, get params, epoch {}, comm_tag {}".format(client_config.idx, client_config.epoch_idx, comm_tag))
+        if VERBOSE:
+            print("client {}, get params, epoch {}, comm_tag {}".format(client_config.idx, client_config.epoch_idx, comm_tag))
 
         logger = init_logger(comm_tag, client_config)
         logger.info("_____****_____\nEpoch: {:04d}".format(client_config.epoch_idx))
@@ -79,26 +82,22 @@ def main():
         )
 
         # start local training
-        # loop = asyncio.new_event_loop()
-        # asyncio.set_event_loop(loop)
-        # tasks = [
-        #     asyncio.ensure_future(
-        #         local_training(client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger))
-        # ]
-        # loop.run_until_complete(asyncio.wait(tasks))
-        # loop.close()
         local_training(client_config, train_loader, test_loader, meta_test_loader=meta_test_loader, logger=logger)
 
         keys_to_send = ["lr", "inner_lr", "outer_lr"]
-        if cfg['eval_while_training'] or client_config.is_eval:
-            extended_info = ["adapt_time", "acc_bf_adpt", "loss_bf_adpt", "acc_af_adpt", "loss_af_adpt"]
-            keys_to_send.extend(extended_info)
-        if client_config.is_eval == False:
-            keys_to_send.append("params")
+        if client_config.is_eval:
+            keys_to_send.extend(["adapt_time", "acc_bf_adpt", "loss_bf_adpt", "acc_af_adpt", "loss_af_adpt"])
+        elif cfg['eval_while_training']:
+            if (client_config.epoch_idx - 1)% cfg['eval_round'] == 0:
+                keys_to_send.extend(["params", "adapt_time", "acc_bf_adpt", "loss_bf_adpt", "acc_af_adpt", "loss_af_adpt"])
+            else:
+                keys_to_send.extend(["params"])
+
 
         # 构造需要发送的字典
         config_to_send = {key: getattr(client_config, key) for key in keys_to_send}
-        print("client {} with rank {}, send params, epoch {}, comm_tag {}".format(client_config.idx, rank, client_config.epoch_idx, comm_tag))
+        if VERBOSE:
+            print("client {} with rank {}, send params, epoch {}, comm_tag {}".format(client_config.idx, rank, client_config.epoch_idx, comm_tag))
         communicate_with_server(config_to_send, comm_tag, 'send_config')
 
         comm_tag += 1
@@ -126,7 +125,7 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
         config.epoch_idx, epoch_lr, inner_lr, outer_lr))
 
     # if eval or eval while training
-    if config.is_eval or cfg['eval_while_training']:
+    if config.is_eval or (cfg['eval_while_training'] and config.epoch_idx % cfg['eval_round'] == 0):
         # before adaptation
         test_loss, test_acc = base.test(local_model, meta_test_loader, device, model_type=cfg['model_type'])
         config.acc_bf_adpt, config.loss_bf_adpt = test_acc, test_loss
@@ -135,11 +134,17 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
     # Training clients
     if config.is_eval == False:
         if cfg['meta_method']=='fedavg':
-            info_dic = base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
+            info_dic = base.train(
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='fomaml':
-            info_dic = fomaml.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+            info_dic = fomaml.train(
+                local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='mamlhf':
-            info_dic = mamlhf.train(local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+            info_dic = mamlhf.train(
+                local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+        elif cfg['meta_method']=='reptile':
+            info_dic = reptile.train(
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
         # save params to config for sending back
         config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
         logger.info(
@@ -149,7 +154,7 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
         config.train_time = info_dic["train_time"]
     
     # training and eval clients:
-    if config.is_eval or cfg['eval_while_training']:
+    if config.is_eval or (cfg['eval_while_training'] and config.epoch_idx % cfg['eval_round'] == 0):
         # after adaptation
         info_dic=base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, adapt_steps, device, cfg['model_type'])
         test_loss, test_acc = base.test(local_model, meta_test_loader, device, model_type=cfg['model_type'])
