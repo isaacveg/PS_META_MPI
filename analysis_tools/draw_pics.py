@@ -16,9 +16,9 @@ if not os.path.exists(result_root):
     os.makedirs(result_root)
 
 draw_requirements = {
-    'meta_method': ['fomaml', 'mamlhf']
+    'meta_method': ['fomaml', 'mamlhf', 'fedavg']
     ,'inner_lr': [0.01]
-    ,'outer_lr': [0.05]
+    ,'outer_lr': [0.05, 0.1]
     ,'epoch_num': [200]
     ,'data_partition_pattern':[1]
     ,'non_iid_ratio': [7]

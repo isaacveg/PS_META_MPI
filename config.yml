@@ -48,8 +48,10 @@ client_use_cuda: True
 client_cuda: '-1'                   # '-1' means that client chooses the gpu adaptively according to the process id
 
 # path
-dataset_path: '/data/yzhu/datasets'
-# cache_path: '/data/yzhu/datasets'
+dataset_path: '/data/yzhu/datasets/avazu/mini_set.csv'
+data_partition_path: '/data/yzhu/datasets/avazu/partition/data_partition.csv'
+cache_path: '/data/yzhu/datasets/avazu/.avazu'
+model_save_path: '/home/yzhu/PS_META_MPI/model_save/'
 
 # seed
 model_init_seed: 2024
