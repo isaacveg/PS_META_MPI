@@ -26,7 +26,7 @@ weight_decay: 0.0005
 
 # meta-learning setting
 meta_method:   fomaml                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
-outer_lr: 0.1                     # lr \beta  
+outer_lr: 0.05                     # lr \beta  
 inner_lr: 0.01                     # lr \alpha
 eval_clients_num: 2              # how many clients only used for eval
 eval_while_training: True         # whether to eval while training
