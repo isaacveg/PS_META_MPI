@@ -17,8 +17,12 @@ import torch.nn.functional as F
 def train(model, train_loader, momentum, weight_decay, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
     t_start = time.time()
     model.train()
+
+    # how many steps one iter
+    steps = 3
+    
     if local_iters is None:
-        local_iters = math.ceil(len(train_loader.loader.dataset) / train_loader.loader.batch_size)
+        local_iters = math.ceil(len(train_loader.loader.dataset) / train_loader.loader.batch_size / steps)
     # print("local_iters: ", local_iters)
 
     if momentum < 0:
@@ -30,36 +34,68 @@ def train(model, train_loader, momentum, weight_decay, alpha, beta, local_iters=
     train_loss = 0.0
     samples_num = 0
 
-    original_model = torch.nn.utils.parameters_to_vector(model.parameters()).detach()
-
     for iter_idx in range(local_iters):
-        data, target = next(train_loader)
-        # print("here after data")
+        original_model = torch.nn.utils.parameters_to_vector(model.parameters()).detach()
 
-        if model_type == 'LR':
-            data = data.squeeze(1).view(-1, 28 * 28)
+        for step in range(steps):
+            data, target = next(train_loader)
+            # print("here after data")
+
+            if model_type == 'LR':
+                data = data.squeeze(1).view(-1, 28 * 28)
+                
+            data, target = data.to(device), target.to(device)
             
-        data, target = data.to(device), target.to(device)
-        
-        output = model(data)
+            output = model(data)
 
-        optimizer.zero_grad()
-        
-        loss_func = nn.CrossEntropyLoss().to(device) 
-        loss = loss_func(output, target)
-        # print("here")
-        loss.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            
+            loss_func = nn.CrossEntropyLoss().to(device) 
+            loss = loss_func(output, target)
+            # print("here")
+            loss.backward()
+            optimizer.step()
 
-        train_loss += (loss.item() * data.size(0))
-        samples_num += data.size(0)
+            train_loss += (loss.item() * data.size(0))
+            samples_num += data.size(0)
+
+        updated_para = torch.nn.utils.parameters_to_vector(model.parameters()).detach()
+        para_delta = updated_para - original_model
+        original_model += para_delta * beta
 
     if samples_num != 0:
         train_loss /= samples_num
 
-    updated_para = torch.nn.utils.parameters_to_vector(model.parameters()).detach()
-    para_delta = updated_para - original_model
-    original_model += para_delta * beta
+    # original_model = torch.nn.utils.parameters_to_vector(model.parameters()).detach()
+
+    # for iter_idx in range(local_iters):
+    #     data, target = next(train_loader)
+    #     # print("here after data")
+
+    #     if model_type == 'LR':
+    #         data = data.squeeze(1).view(-1, 28 * 28)
+            
+    #     data, target = data.to(device), target.to(device)
+        
+    #     output = model(data)
+
+    #     optimizer.zero_grad()
+        
+    #     loss_func = nn.CrossEntropyLoss().to(device) 
+    #     loss = loss_func(output, target)
+    #     # print("here")
+    #     loss.backward()
+    #     optimizer.step()
+
+    #     train_loss += (loss.item() * data.size(0))
+    #     samples_num += data.size(0)
+
+    # if samples_num != 0:
+    #     train_loss /= samples_num
+
+    # updated_para = torch.nn.utils.parameters_to_vector(model.parameters()).detach()
+    # para_delta = updated_para - original_model
+    # original_model += para_delta * beta
     
     return {'train_loss': train_loss, 'train_time': time.time()-t_start,
             'params': original_model}

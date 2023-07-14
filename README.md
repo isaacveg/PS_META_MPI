@@ -21,7 +21,7 @@ Federated Meta-learning version of isaacveg/PS_MPI
 
 ## Run
 The number after should be larger than config.yml : selected_num + eval_clients_num  
-mpiexec --oversubscribe -n 1 python server.py : -n 10 python client.py  
+mpiexec --oversubscribe -n 1 python server.py : -n 12 python client.py  
 
 
 ## Save last training record to anther directory 
@@ -42,4 +42,6 @@ rm -rf model_save server_log clients_log config_save  __pycache__
 1. Only the server:
 python server.py
 2. Only the client:
-python client.py
+TODO
+
+## 

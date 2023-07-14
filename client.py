@@ -138,13 +138,13 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
                 local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='fomaml':
             info_dic = fomaml.train(
-                local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+                local_model, train_loader, inner_lr, outer_lr, local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='mamlhf':
             info_dic = mamlhf.train(
-                local_model, train_loader, cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+                local_model, train_loader, inner_lr, outer_lr, local_steps, device, cfg['model_type'])
         elif cfg['meta_method']=='reptile':
             info_dic = reptile.train(
-                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], cfg['inner_lr'], cfg['outer_lr'], local_steps, device, cfg['model_type'])
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], inner_lr, outer_lr, local_steps, device, cfg['model_type'])
         # save params to config for sending back
         config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
         logger.info(
