@@ -13,6 +13,7 @@ import datasets.SVHN
 import datasets.EMNIST
 import datasets.tinyImageNet
 import datasets.image100
+import datasets.avazu
 # add your own datasets 
 
 

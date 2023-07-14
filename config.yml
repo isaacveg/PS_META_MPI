@@ -25,7 +25,7 @@ momentum: 0.9                        # momentum < 0 means the momentum is None
 weight_decay: 0.0005
 
 # meta-learning setting
-meta_method:   fomaml                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
+meta_method:   reptile                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
 outer_lr: 0.05                     # lr \beta  
 inner_lr: 0.01                     # lr \alpha
 eval_clients_num: 2              # how many clients only used for eval
@@ -48,7 +48,8 @@ client_use_cuda: True
 client_cuda: '-1'                   # '-1' means that client chooses the gpu adaptively according to the process id
 
 # path
-dataset_path: '/data/yzhu/datasets/avazu/mini_set.csv'
+# dataset_path: '/data/yzhu/datasets/avazu/mini_set.csv'
+dataset_path: '/data/yzhu/datasets/'
 data_partition_path: '/data/yzhu/datasets/avazu/partition/data_partition.csv'
 cache_path: '/data/yzhu/datasets/avazu/.avazu'
 model_save_path: '/home/yzhu/PS_META_MPI/model_save/'
