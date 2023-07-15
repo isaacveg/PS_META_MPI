@@ -3,17 +3,12 @@ from os.path import join as ospj
 import yaml
 import matplotlib
 from matplotlib import pyplot as plt
+from scipy.ndimage import gaussian_filter1d as g1d
 
-matplotlib.use('Agg')
-matplotlib.rcParams['savefig.format'] = 'png'
 
-result_root = './results/'
-plot_root = './plot/'
-
-if not os.path.exists(plot_root):
-    os.makedirs(plot_root)
-if not os.path.exists(result_root):
-    os.makedirs(result_root)
+# Whether smoothing the curve
+SMTH = True
+g1dsigma = 1
 
 # Add fileters below that you don't want to draw
 result_filters = {
@@ -34,6 +29,17 @@ draw_contents = [
     ,'test_acc'
     ,'test_loss'
 ]
+
+matplotlib.use('Agg')
+matplotlib.rcParams['savefig.format'] = 'png'
+
+result_root = './results/'
+plot_root = './plot/'
+
+if not os.path.exists(plot_root):
+    os.makedirs(plot_root)
+if not os.path.exists(result_root):
+    os.makedirs(result_root)
 
 
 def main():
@@ -80,8 +86,12 @@ def main():
 
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
-            plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-            plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
@@ -103,12 +113,16 @@ def main():
 
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
-            plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-            plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
 
         plt.xlabel('Epochs')
-        plt.ylabel('Accuracy')
-        plt.title('Training Evaluation Accuracy')
+        plt.ylabel('Loss')
+        plt.title('Training Evaluation Loss')
         plt.legend() 
         plt.savefig(plot_root+'/train_loss.png')
 
@@ -130,8 +144,12 @@ def main():
 
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
-            plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-            plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
@@ -155,8 +173,12 @@ def main():
 
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
-            plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-            plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
 
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
@@ -169,11 +191,13 @@ def main():
         plt.figure()
         for idx, cfg in acquired_cfgs:
             _, _, t = process_server_log(server_logs[idx])
-            test_acc_before_values = [d.get('test_acc') for d in t]
+            test_acc = [d.get('test_acc') for d in t]
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
-            epochs = range(1, len(test_acc_before_values)+1)
-            plt.plot(epochs, test_acc_before_values, label=result_str)
-
+            epochs = range(1, len(test_acc)+1)
+            if SMTH:
+                plt.plot(epochs, g1d(test_acc, sigma=g1dsigma), label=result_str)
+            else:
+                plt.plot(epochs, test_acc, label=result_str)
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.title('Global_meta_model Accuracy')
@@ -183,10 +207,13 @@ def main():
         plt.figure()
         for idx, cfg in acquired_cfgs:
             _, _, t = process_server_log(server_logs[idx])
-            test_loss_before_values = [d.get('test_loss') for d in t]
+            test_loss = [d.get('test_loss') for d in t]
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
-            epochs = range(1, len(test_loss_before_values)+1)
-            plt.plot(epochs, test_loss_before_values, label=result_str)
+            epochs = range(1, len(test_loss)+1)
+            if SMTH:
+                plt.plot(epochs, g1d(test_loss, sigma=g1dsigma), label=result_str)
+            else:
+                plt.plot(epochs, test_loss, label=result_str)
 
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
@@ -194,7 +221,6 @@ def main():
         plt.legend() 
         plt.savefig(plot_root+'/test_loss.png')
     
-
 
 
 def process_server_log(filename):
