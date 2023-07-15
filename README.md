@@ -26,11 +26,12 @@ mpiexec --oversubscribe -n 1 python server.py : -n 12 python client.py
 
 ## Save last training record to anther directory 
 This will move all results and config to /results  
-python ./analysis_tools/generate_results.py
+python ./analysis_tools/gathering_results.py
 
 
 ## Generate pictures  
-TODO  
+This will plot all results from server_logs and save to /plots  
+python ./analysis_tools/draw_pics.py
 
 
 ## Clear ALL log and saved models  
