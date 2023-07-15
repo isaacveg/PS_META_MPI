@@ -20,7 +20,6 @@ import torch.nn.functional as F
 import datasets, models
 from training_utils.base import test
 import shutil
-import csv
 
 from mpi4py import MPI
 
@@ -306,15 +305,6 @@ def partition_data(dataset_type, partition_pattern, non_iid_ratio, client_num=10
                 partition_sizes[i % cfg['classes_size']][i] = most_data_proportion
         else:
             raise ValueError('Non-IID ratio is out of range')
-    # elif partition_pattern == 4:
-    #     # 取出数据集中所有的device_id
-    #     with open(cfg['data_partition_path'], 'r') as f:
-    #         reader = csv.reader(f)
-    #         data_partition = [row for row in reader]
-    #     for i in range(len(data_partition)):
-    #         data_partition[i] = list(map(int, data_partition[i]))
-    #     data_partition = datasets.RecPartitioner(data_partition=data_partition)
-    #     return data_partition, test_data_partition, _
     else:
         raise ValueError('Not valid partition pattern')
 
