@@ -3,23 +3,18 @@ from os.path import join as ospj
 import yaml
 import matplotlib
 from matplotlib import pyplot as plt
+from scipy.ndimage import gaussian_filter1d as g1d
 
-matplotlib.use('Agg')
-matplotlib.rcParams['savefig.format'] = 'png'
 
-result_root = './results/'
-plot_root = './plot/'
-
-if not os.path.exists(plot_root):
-    os.makedirs(plot_root)
-if not os.path.exists(result_root):
-    os.makedirs(result_root)
+# Whether smoothing the curve
+SMTH = True
+g1dsigma = 1
 
 # Add fileters below that you don't want to draw
 result_filters = {
-    'meta_method': ['fomaml', 'mamlhf', 'fedavg']
+    'meta_method': ['fomaml', 'mamlhf', 'fedavg', 'reptile']
     ,'inner_lr': [0.01]
-    ,'outer_lr': [0.05, 0.1]
+    ,'outer_lr': [0.05]
     ,'epoch_num': [200]
     ,'data_partition_pattern':[1]
     ,'non_iid_ratio': [7]
@@ -34,6 +29,17 @@ draw_contents = [
     ,'test_acc'
     ,'test_loss'
 ]
+
+matplotlib.use('Agg')
+matplotlib.rcParams['savefig.format'] = 'png'
+
+result_root = './results/'
+plot_root = './plot/'
+
+if not os.path.exists(plot_root):
+    os.makedirs(plot_root)
+if not os.path.exists(result_root):
+    os.makedirs(result_root)
 
 
 def main():
@@ -53,9 +59,13 @@ def main():
         flag = 0
         for key, value in result_filters.items():
             # 如果有一个不满足要求则跳过，否则加入列表
-            if cfg[key] not in value:
-                flag = 1
-                break
+            try:
+                if cfg[key] not in value:
+                    flag = 1
+                    break
+            # 一些后实现的结果可能会包含之前结果的内容
+            except KeyError:
+                pass
         if flag == 0:acquired_cfgs.append((idx, cfg))
     
     print([cfg[0] for cfg in acquired_cfgs])
@@ -76,14 +86,45 @@ def main():
 
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
-            plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-            plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.title('Training Evaluation Accuracy')
         plt.legend() 
         plt.savefig(plot_root+'/train_acc.png')
+    if 'train_loss' in draw_contents:
+        plt.figure()
+        for idx, cfg in acquired_cfgs:
+            # 获取每个epoch的eval_acc_before和eval_acc_after的值和epoch_cnt
+            t, _, _ = process_server_log(server_logs[idx])
+            # draw_and_save(t, 'train_acc', cfg)
+            eval_acc_before = [(d.get('eval_loss_before')[0], d.get('eval_loss_before')[1]) for d in t]
+            eval_acc_after = [(d.get('eval_loss_after')[0], d.get('eval_loss_after')[1]) for d in t]
+
+            # 分离epoch_cnt和eval_acc_before和eval_acc_after的值
+            epochs, eval_acc_before_values = zip(*eval_acc_before)
+            _, eval_acc_after_values = zip(*eval_acc_after)
+
+            result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
+            # 绘制eval_acc_before和eval_acc_after
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Training Evaluation Loss')
+        plt.legend() 
+        plt.savefig(plot_root+'/train_loss.png')
 
     ## 画eval_acc部分
     if 'eval_acc' in draw_contents:
@@ -103,32 +144,83 @@ def main():
 
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
-            plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-            plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.title('Eval_clients Evaluation Accuracy')
         plt.legend() 
         plt.savefig(plot_root+'/eval_acc.png')
+    if 'eval_loss' in draw_contents:
+        plt.figure()
+        for idx, cfg in acquired_cfgs:
+            # 获取每个epoch的eval_acc_before和eval_acc_after的值和epoch_cnt
+            _, t, _ = process_server_log(server_logs[idx])
+            # draw_and_save(t, 'train_acc', cfg)
+            eval_acc_before = [(d.get('eval_loss_before')[0], d.get('eval_loss_before')[1]) for d in t]
+            eval_acc_after = [(d.get('eval_loss_after')[0], d.get('eval_loss_after')[1]) for d in t]
+            # print(cfg['meta_method'],eval_acc_after)
+            # 分离epoch_cnt和eval_acc_before和eval_acc_after的值
+            epochs, eval_acc_before_values = zip(*eval_acc_before)
+            _, eval_acc_after_values = zip(*eval_acc_after)
+
+            # print(cfg['meta_method'],eval_acc_after_values)
+
+            result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
+            # 绘制eval_acc_before和eval_acc_after
+            if SMTH:
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+            else:
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Eval_clients Evaluation Loss')
+        plt.legend() 
+        plt.savefig(plot_root+'/eval_loss.png')
     
     ## 画 test acc部分
     if 'test_acc' in draw_contents:
         plt.figure()
         for idx, cfg in acquired_cfgs:
             _, _, t = process_server_log(server_logs[idx])
-            test_acc_before_values = [d.get('test_acc') for d in t]
+            test_acc = [d.get('test_acc') for d in t]
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
-            epochs = range(1, len(test_acc_before_values)+1)
-            plt.plot(epochs, test_acc_before_values, label=result_str)
-
+            epochs = range(1, len(test_acc)+1)
+            if SMTH:
+                plt.plot(epochs, g1d(test_acc, sigma=g1dsigma), label=result_str)
+            else:
+                plt.plot(epochs, test_acc, label=result_str)
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.title('Global_meta_model Accuracy')
         plt.legend() 
         plt.savefig(plot_root+'/test_acc.png')
-    
+    if 'test_loss' in draw_contents:
+        plt.figure()
+        for idx, cfg in acquired_cfgs:
+            _, _, t = process_server_log(server_logs[idx])
+            test_loss = [d.get('test_loss') for d in t]
+            result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
+            epochs = range(1, len(test_loss)+1)
+            if SMTH:
+                plt.plot(epochs, g1d(test_loss, sigma=g1dsigma), label=result_str)
+            else:
+                plt.plot(epochs, test_loss, label=result_str)
 
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Global_meta_model Loss')
+        plt.legend() 
+        plt.savefig(plot_root+'/test_loss.png')
+    
 
 
 def process_server_log(filename):

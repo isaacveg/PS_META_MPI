@@ -144,5 +144,5 @@ class AvazuDataset(Dataset):
 # print(dataset.__getitem__(1)[1])
 
 def create_dataset(data_path):
-    return  AvazuDataset(is_training=True), AvazuDataset(is_training=False)
+    return  AvazuDataset(dataset_path=data_path, is_training=True), AvazuDataset(dataset_path=data_path, is_training=False)
 
