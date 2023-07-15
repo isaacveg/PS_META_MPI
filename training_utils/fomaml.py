@@ -16,26 +16,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def train(model, train_loader, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
+def train(model, train_loader, alpha, beta, local_iters=None, local_epochs=1,device=torch.device("cpu"), model_type=None):
     """
-    Train a model using the First Order MAML algorithm for a given number of iterations.
-    
+    Trains a given model using a First Order MAML approach.
+
     Args:
-        model: The model to be trained.
-        train_loader: The data loader for training data.
-        alpha: The learning rate for the one-step update.
-        beta: The meta-learning rate for the gradient update.
-        local_iters: The number of local iterations to perform. 
-            If None, default to ceil(len(train_loader.loader.dataset) / train_loader.loader.batch_size / 2).
-        device: The device to run the training on. Defaults to torch.device("cpu").
-        model_type: The type of the model. Defaults to None.
-    
+        model (torch.nn.Module): The model to be trained.
+        train_loader (torch.utils.data.DataLoader): The data loader for training data.
+        alpha (float): The learning rate for the one-step training.
+        beta (float): The learning rate for the gradient update.
+        local_iters (int, optional): The number of local iterations for the MAML training. 
+            If not specified, it is calculated based on the size of the training dataset.
+        local_epochs (int, optional): The number of local epochs for the MAML training. Default is 1.
+        device (torch.device, optional): The device to run the training on. Default is 'cpu'.
+        model_type (str, optional): The type of the model. Default is None.
+
     Returns:
-        A dictionary containing the following:
-        - train_loss: The average training loss per sample.
-        - grad_loss: The average gradient loss per sample.
-        - train_time: The total training time.
-        - params: The model parameters.
+        dict: A dictionary containing the following metrics:
+            - 'train_loss' (float): The average training loss.
+            - 'grad_loss' (float): The average gradient loss.
+            - 'train_time' (float): The total training time.
+            - 'params' (torch.Tensor): The model parameters.
     """
     t_start = time.time()
     model.train()
@@ -48,22 +49,23 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
     losses = [0.0, 0.0]
     sample_num = [0,0]
 
-    for epoch in range(local_iters):
-        temp_model = copy.deepcopy(model)
-        # step 1: one step train
-        batch_1 = next(train_loader)
-        temp_model, one_step_loss = one_step(device, batch_1, temp_model, model_type, lr=alpha)
+    for epoch_idx in range(local_epochs):
+        for iter_idx in range(local_iters):
+            temp_model = copy.deepcopy(model)
+            # step 1: one step train
+            batch_1 = next(train_loader)
+            temp_model, one_step_loss = one_step(device, batch_1, temp_model, model_type, lr=alpha)
 
-        # step 2: get grad
-        batch_2 = next(train_loader)
-        temp_model, grad_loss = get_grad(device, batch_2, model, model_type)
+            # step 2: get grad
+            batch_2 = next(train_loader)
+            temp_model, grad_loss = get_grad(device, batch_2, model, model_type)
 
-        # step 3: update model
-        for param, grad_param in zip(model.parameters(), temp_model.parameters()):
-            param.data.sub_(beta * grad_param.grad.data)
-    
-        losses = [losses[0]+one_step_loss, losses[1]+grad_loss]
-        sample_num = [sample_num[0]+len(batch_1[0]), sample_num[1]+len(batch_2[0])]
+            # step 3: update model
+            for param, grad_param in zip(model.parameters(), temp_model.parameters()):
+                param.data.sub_(beta * grad_param.grad.data)
+        
+            losses = [losses[0]+one_step_loss, losses[1]+grad_loss]
+            sample_num = [sample_num[0]+len(batch_1[0]), sample_num[1]+len(batch_2[0])]
         
  
     return {'train_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 

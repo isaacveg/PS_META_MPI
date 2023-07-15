@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from collections import OrderedDict
 
 
-def train(model, train_loader, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
+def train(model, train_loader, alpha, beta, local_iters=None, local_epochs=1, device=torch.device("cpu"), model_type=None):
     t_start = time.time()
     model.train()
     
@@ -30,26 +30,27 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
     losses = [0.0, 0.0, 0.0]
     sample_num = [0, 0, 0]
 
-    for epoch in range(local_iters):
-        temp_model = copy.deepcopy(model)
-        # step 1: one step train
-        batch_1 = next(train_loader)
-        temp_model, one_step_loss = one_step(device, batch_1, temp_model, model_type, lr=alpha)
+    for epoch_idx in range(local_epochs):
+        for epoch in range(local_iters):
+            temp_model = copy.deepcopy(model)
+            # step 1: one step train
+            batch_1 = next(train_loader)
+            temp_model, one_step_loss = one_step(device, batch_1, temp_model, model_type, lr=alpha)
 
-        # step 2: get grad
-        batch_2 = next(train_loader)
-        grad_1, grad_loss = compute_grad(temp_model, batch_2, device)
+            # step 2: get grad
+            batch_2 = next(train_loader)
+            grad_1, grad_loss = compute_grad(temp_model, batch_2, device)
 
-        # step 3: approximate 2nd grad
-        batch_3 = next(train_loader)
-        grad_2, grad2_loss = compute_grad(model, batch_3, device, v=grad_1, second_order_grads=True)
+            # step 3: approximate 2nd grad
+            batch_3 = next(train_loader)
+            grad_2, grad2_loss = compute_grad(model, batch_3, device, v=grad_1, second_order_grads=True)
 
-        # step 3: update model
-        for param, grad1, grad2 in zip(model.parameters(), grad_1, grad_2):
-            param.data.sub_(beta * grad1 - beta * alpha * grad2)
-    
-        losses = [losses[0]+one_step_loss, losses[1]+grad_loss, losses[2]+grad2_loss]
-        sample_num = [sample_num[0]+len(batch_1[0]), sample_num[1]+len(batch_2[0]), sample_num[2]+len(batch_3[0])]
+            # step 3: update model
+            for param, grad1, grad2 in zip(model.parameters(), grad_1, grad_2):
+                param.data.sub_(beta * grad1 - beta * alpha * grad2)
+        
+            losses = [losses[0]+one_step_loss, losses[1]+grad_loss, losses[2]+grad2_loss]
+            sample_num = [sample_num[0]+len(batch_1[0]), sample_num[1]+len(batch_2[0]), sample_num[2]+len(batch_3[0])]
 
     return {'train_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 
             'grad_loss': losses[1]/sample_num[1] if sample_num[1] != 0 else losses[1], 

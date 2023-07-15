@@ -32,6 +32,8 @@ eval_clients_num: 2              # how many clients only used for eval
 eval_while_training: True         # whether to eval while training
 eval_round: 5                    # how many epochs meta test once, default 1
 adapt_steps: 5                    # epochs of adaptation before eval
+# attention: local_epoch means went through local dataset, default 1
+local_epochs: 1
 
 # global control
 client_num: 20                      # total number of clients (not the number of selected clients)
