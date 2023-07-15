@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def train(model, train_loader, alpha, beta, local_iters=None, device=torch.device("cpu"), model_type=None):
+def train(model, train_loader, alpha, beta, local_iters=None, local_epochs=1, device=torch.device("cpu"), model_type=None):
     """
     Trains a model using the MAML algorithm.
 
@@ -45,32 +45,33 @@ def train(model, train_loader, alpha, beta, local_iters=None, device=torch.devic
     losses = [0.0, 0.0, 0.0]
     sample_num = [0,0,0]
     
-    for epoch in range(local_iters):
-        origin_model = copy.deepcopy(model)
-        final_model = copy.deepcopy(model)
+    for epoch_idx in range(local_epochs):
+        for epoch in range(local_iters):
+            origin_model = copy.deepcopy(model)
+            final_model = copy.deepcopy(model)
 
-        # step1, one step on one batch, middle model
-        batch_1 = next(train_loader)
-        model, one_step_loss = one_step(device, batch_1, model, model_type, lr=alpha)
-        # step2, get grad on next batch
-        batch_2 = next(train_loader)
-        model, grad_loss = get_grad(device, batch_2, model, model_type)
-        # step3, get hessian on third batch using original model
-        batch_3 = next(train_loader)
-        hessian_params, hessian_loss = get_hessian(device, batch_3, origin_model, model_type)
-        # step 4
-        cnt = 0
-        for param, param_grad in zip(final_model.parameters(), model.parameters()):
-            hess = hessian_params[cnt]
-            cnt += 1
-            I = torch.ones_like(param.data)
-            grad = (I - alpha * hess) * param_grad.grad.data
-            param.data = param.data - beta * grad
+            # step1, one step on one batch, middle model
+            batch_1 = next(train_loader)
+            model, one_step_loss = one_step(device, batch_1, model, model_type, lr=alpha)
+            # step2, get grad on next batch
+            batch_2 = next(train_loader)
+            model, grad_loss = get_grad(device, batch_2, model, model_type)
+            # step3, get hessian on third batch using original model
+            batch_3 = next(train_loader)
+            hessian_params, hessian_loss = get_hessian(device, batch_3, origin_model, model_type)
+            # step 4
+            cnt = 0
+            for param, param_grad in zip(final_model.parameters(), model.parameters()):
+                hess = hessian_params[cnt]
+                cnt += 1
+                I = torch.ones_like(param.data)
+                grad = (I - alpha * hess) * param_grad.grad.data
+                param.data = param.data - beta * grad
 
-        model = copy.deepcopy(final_model)
+            model = copy.deepcopy(final_model)
 
-        sample_num = [sample_num[0] + len(batch_1[0]), sample_num[1] + len(batch_2[0]), sample_num[2] + len(batch_3[0])]
-        losses = [losses[0] + one_step_loss, losses[1] + grad_loss, losses[2] + hessian_loss]
+            sample_num = [sample_num[0] + len(batch_1[0]), sample_num[1] + len(batch_2[0]), sample_num[2] + len(batch_3[0])]
+            losses = [losses[0] + one_step_loss, losses[1] + grad_loss, losses[2] + hessian_loss]
  
     return {'one_step_loss': losses[0]/sample_num[0] if sample_num[0] != 0 else losses[0], 
             'grad_loss': losses[1]/sample_num[1] if sample_num[1] != 0 else losses[1], 

@@ -135,16 +135,16 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
     if config.is_eval == False:
         if cfg['meta_method']=='fedavg':
             info_dic = base.train(
-                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, device, cfg['model_type'])
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, local_steps, cfg['local_epochs'], device, cfg['model_type'])
         elif cfg['meta_method']=='fomaml':
             info_dic = fomaml.train(
-                local_model, train_loader, inner_lr, outer_lr, local_steps, device, cfg['model_type'])
+                local_model, train_loader, inner_lr, outer_lr, local_steps, cfg['local_epochs'], device, cfg['model_type'])
         elif cfg['meta_method']=='mamlhf':
             info_dic = mamlhf.train(
-                local_model, train_loader, inner_lr, outer_lr, local_steps, device, cfg['model_type'])
+                local_model, train_loader, inner_lr, outer_lr, local_steps, cfg['local_epochs'], device, cfg['model_type'])
         elif cfg['meta_method']=='reptile':
             info_dic = reptile.train(
-                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], inner_lr, outer_lr, local_steps, device, cfg['model_type'])
+                local_model, train_loader, cfg['momentum'], cfg['weight_decay'], inner_lr, outer_lr, local_steps, cfg['local_epochs'], device, cfg['model_type'])
         # save params to config for sending back
         config.params = torch.nn.utils.parameters_to_vector(local_model.parameters()).detach()
         logger.info(
@@ -156,7 +156,7 @@ def local_training(config, train_loader, test_loader, meta_test_loader=None, log
     # training and eval clients:
     if config.is_eval or (cfg['eval_while_training'] and config.epoch_idx % cfg['eval_round'] == 0):
         # after adaptation
-        info_dic=base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, adapt_steps, device, cfg['model_type'])
+        info_dic=base.train(local_model, train_loader, cfg['momentum'], cfg['weight_decay'], epoch_lr, adapt_steps, 1,  device, cfg['model_type'])
         test_loss, test_acc = base.test(local_model, meta_test_loader, device, model_type=cfg['model_type'])
         config.acc_af_adpt, config.loss_af_adpt = test_acc, test_loss
         logger.info("eval_acc_after_adaptation: {}, eval_loss_after_adaptation: {}".format(
