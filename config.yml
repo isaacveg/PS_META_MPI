@@ -1,21 +1,21 @@
 ---
 # model
-model_type: 'AlexNet'                   
+model_type: 'ResNet'                   
 # cnn_hidden_size: [64, 128, 128]
 # resnet_hidden_size: [64, 64, 128, 256, 512]
 
 # data
-dataset_type: 'CIFAR10'             # "MNIST", "CIFAR10","CIFAR100", "EMNIST", "FashionMNIST", "image100"
+dataset_type: 'CIFAR100'             # "MNIST", "CIFAR10","CIFAR100", "EMNIST", "FashionMNIST", "image100"
 data_shape: [1, 8776]             # MNIST is [1, 28, 28], CIFAR10 is [3, 32, 32] and image100 is [3, 144, 144]
-classes_size: 10                    # MNIST is 10, CIFAR10 is 10, image100 is 100
+classes_size: 100                    # MNIST is 10, CIFAR10 is 10, image100 is 100
 data_partition_pattern: 1          # 0, 1, or 2. (0 is iid while 1 and 2 are both non-iid)
 non_iid_ratio: 7                    # make sure: 0 < non_iid_ratio < 10
 min_threshold: 4
 
 # batch size
 local_batch_size: 32               # local training batch size
-test_batch_size: 128                 # test batch size of the server
-client_test_batch_size: 128
+test_batch_size: 64                 # test batch size of the server
+client_test_batch_size: 64
 
 # training setting
 lr: 0.01
@@ -25,10 +25,10 @@ momentum: 0.9                        # momentum < 0 means the momentum is None
 weight_decay: 0.0005
 
 # meta-learning setting
-meta_method:   fomaml                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
+meta_method:   fedavg                # Methods: fedavg\mamlhf(hessian free)\fomaml\reptile\maml(DONT USE)  Reptile nearly the same as FedAvg
 outer_lr: 0.05                     # lr \beta  
 inner_lr: 0.01                     # lr \alpha
-eval_clients_num: 2              # how many clients only used for eval
+eval_clients_num: 5              # how many clients only used for eval
 eval_while_training: True         # whether to eval while training
 eval_round: 5                    # how many epochs meta test once, default 1
 adapt_steps: 5                    # epochs of adaptation before eval
@@ -36,16 +36,16 @@ adapt_steps: 5                    # epochs of adaptation before eval
 local_epochs: 1
 
 # global control
-client_num: 20                      # total number of clients (not the number of selected clients)
+client_num: 100                      # total number of clients (not the number of selected clients)
 selected_num: 10                      # the number of selected clients
-epoch_num: 500
+epoch_num: 200
 local_iters: 10                      # local training step of the client in each epoch, left blank to calculate
 compress_method: random              # compress method, random/top_k/quant, left blank to disable compress
 compress_ratio: 0.5                # compress ratio, only used when method is random/top_k
 
 # CUDA
 server_use_cuda: True
-server_cuda: '1'                    # which gpu to choose for server
+server_cuda: '2'                    # which gpu to choose for server
 client_use_cuda: True
 client_cuda: '-1'                   # '-1' means that client chooses the gpu adaptively according to the process id
 

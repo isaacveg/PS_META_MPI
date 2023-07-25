@@ -77,6 +77,7 @@ def main():
         # load the test and train loader
         meta_test_loader = datasets.create_dataloaders(
                 test_dataset, batch_size=cfg['client_test_batch_size'], selected_idxs=client_config.test_data_idxes, shuffle=False)
+        # print(f"{client_config.idx}: meta_test_loader_len", len(client_config.test_data_idxes))
         train_loader = datasets.create_dataloaders(
             train_dataset, batch_size=cfg['local_batch_size'], selected_idxs=client_config.train_data_idxes
         )

@@ -13,9 +13,10 @@ g1dsigma = 1
 # Add fileters below that you don't want to draw
 result_filters = {
     'meta_method': ['fomaml', 'mamlhf', 'fedavg', 'reptile']
-    ,'inner_lr': [0.01]
-    ,'outer_lr': [0.05]
-    ,'epoch_num': [200]
+    ,'dataset_type':["CIFAR100"]
+    # ,'inner_lr': [0.01]
+    # ,'outer_lr': [0.05]
+    ,'epoch_num': [500]
     ,'data_partition_pattern':[1]
     ,'non_iid_ratio': [7]
 }
@@ -29,6 +30,10 @@ draw_contents = [
     ,'test_acc'
     ,'test_loss'
 ]
+
+palattes = ['forestgreen', 'bisque', 'aqua', 'royalblue','grey','yellow', 
+            'black', 'deeppink','darkred','fuchsia', 'lime','gold']
+shapes = ['^', 'v', '>', 'o', '3','x','p','s','<','*','.','P']
 
 matplotlib.use('Agg')
 matplotlib.rcParams['savefig.format'] = 'png'
@@ -70,6 +75,8 @@ def main():
     
     print([cfg[0] for cfg in acquired_cfgs])
 
+    gs = gen_style()
+
     ## 画准确率部分
     if 'train_acc' in draw_contents:
         plt.figure()
@@ -87,11 +94,11 @@ def main():
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
             if SMTH:
-                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
-                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
             else:
-                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
@@ -114,11 +121,11 @@ def main():
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
             if SMTH:
-                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
-                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
             else:
-                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
 
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
@@ -145,11 +152,11 @@ def main():
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
             if SMTH:
-                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
-                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
             else:
-                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
 
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
@@ -174,11 +181,11 @@ def main():
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             # 绘制eval_acc_before和eval_acc_after
             if SMTH:
-                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str)
-                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str)
+                plt.plot(epochs, g1d(eval_acc_before_values, sigma=g1dsigma), label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, g1d(eval_acc_after_values, sigma=g1dsigma), label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
             else:
-                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str)
-                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str)
+                plt.plot(epochs, eval_acc_before_values, label='bf_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
+                plt.plot(epochs, eval_acc_after_values, label='af_'+result_str,c=gs.color(),marker=gs.marker(),markevery=10)
 
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
@@ -195,9 +202,9 @@ def main():
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             epochs = range(1, len(test_acc)+1)
             if SMTH:
-                plt.plot(epochs, g1d(test_acc, sigma=g1dsigma), label=result_str)
+                plt.plot(epochs, g1d(test_acc, sigma=g1dsigma), label=result_str,c=gs.color(),marker=gs.marker(),markevery=10)
             else:
-                plt.plot(epochs, test_acc, label=result_str)
+                plt.plot(epochs, test_acc, label=result_str,c=gs.color(),marker=gs.marker(),markevery=10)
         plt.xlabel('Epochs')
         plt.ylabel('Accuracy')
         plt.title('Global_meta_model Accuracy')
@@ -211,9 +218,9 @@ def main():
             result_str = "_".join([ str(cfg[item]) for item in result_filters.keys()])
             epochs = range(1, len(test_loss)+1)
             if SMTH:
-                plt.plot(epochs, g1d(test_loss, sigma=g1dsigma), label=result_str)
+                plt.plot(epochs, g1d(test_loss, sigma=g1dsigma), label=result_str,c=gs.color(),marker=gs.marker(),markevery=10)
             else:
-                plt.plot(epochs, test_loss, label=result_str)
+                plt.plot(epochs, test_loss, label=result_str,c=gs.color(),marker=gs.marker(),markevery=10)
 
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
@@ -268,6 +275,26 @@ def get_config(path_name):
     with open(filename, 'r') as f:
         cfg = yaml.load(f, Loader=yaml.FullLoader)
     return cfg
+
+
+class gen_style():
+    def __init__(self):
+        self.palattes = palattes
+        self.shapes = shapes
+        self.c_cnt = 0
+        self.s_cnt = 0
+        self.MAX_C = len(self.palattes)
+        self.MAX_S = len(self.shapes)
+
+    def color(self):
+        c = self.palattes[self.c_cnt]
+        self.c_cnt = (self.c_cnt + 1) % self.MAX_C
+        return c
+    
+    def marker(self):
+        s = self.shapes[self.s_cnt]
+        self.s_cnt = (self.s_cnt + 1) % self.MAX_S
+        return s
 
 
 
