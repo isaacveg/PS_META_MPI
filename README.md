@@ -1,5 +1,9 @@
 # PS_META_MPI
 
+## Attention   
+本仓库不再更新，新版已经迁移至 github.com/isaacveg/fireworks
+已升级成面向对象版本，更加简洁方便
+
 ## Changes  
 Federated Meta-learning version of isaacveg/PS_MPI   
 1. Use config.yml to simplify settings  
